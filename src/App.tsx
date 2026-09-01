@@ -1,44 +1,69 @@
-import { useMsal, useIsAuthenticated } from '@azure/msal-react';
-import { InteractionStatus } from '@azure/msal-browser';
-import { loginRequest } from './authConfig';
+import React from 'react';
+import { 
+  AuthenticatedTemplate, 
+  UnauthenticatedTemplate, 
+  useMsal 
+} from '@azure/msal-react';
 import { ProtectedData } from './ProtectedData';
 
-export default function App() {
-  const { instance, accounts, inProgress } = useMsal();
-  const isAuthenticated = useIsAuthenticated();
-  const currentUser = accounts[0];
+const LoginScreen = () => {
+  const { instance } = useMsal();
 
   const handleLogin = () => {
-    if (inProgress === InteractionStatus.None) {
-      instance.loginRedirect(loginRequest).catch((e) => console.error(e));
-    }
-  };
-
-  const handleLogout = () => {
-    if (inProgress === InteractionStatus.None) {
-      instance.logoutRedirect({ postLogoutRedirectUri: '/' }).catch((e) => console.error(e));
-    }
+    instance.loginPopup().catch((error) => console.error(error));
   };
 
   return (
-    <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
-      <h1>Portal de Autenticación con Microsoft Entra ID</h1>
+    <div style={{ textAlign: 'center', marginTop: '50px' }}>
+      <h1>Bienvenido a la Aplicación</h1>
+      <p>Debes iniciar sesión con tu cuenta corporativa para continuar.</p>
+      <button onClick={handleLogin} style={{ padding: '10px 20px', cursor: 'pointer' }}>
+        Iniciar Sesión con Microsoft
+      </button>
+    </div>
+  );
+};
 
-      {isAuthenticated ? (
+const MainContent = () => {
+  const { instance, accounts } = useMsal();
+  const currentAccount = accounts[0];
+
+  const handleLogout = () => {
+    instance.logoutPopup().catch((error) => console.error(error));
+  };
+
+  return (
+    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto', fontFamily: 'sans-serif' }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', paddingBottom: '15px' }}>
+        <h2>Panel Principal</h2>
         <div>
-          <p>Bienvenido, <strong>{currentUser?.name || currentUser?.username}</strong></p>
-          <button onClick={handleLogout}>Cerrar Sesión</button>
-          <hr style={{ margin: '1.5rem 0' }} />
-          <ProtectedData />
-        </div>
-      ) : (
-        <div>
-          <p>Debes iniciar sesión con tu cuenta institucional para continuar.</p>
-          <button onClick={handleLogin} disabled={inProgress !== InteractionStatus.None}>
-            {inProgress !== InteractionStatus.None ? 'Cargando...' : 'Iniciar Sesión'}
+          <span>Hola, <strong>{currentAccount?.name || currentAccount?.username}</strong></span>
+          <button onClick={handleLogout} style={{ marginLeft: '15px', padding: '6px 12px', cursor: 'pointer' }}>
+            Cerrar Sesión
           </button>
         </div>
-      )}
+      </header>
+
+      <main style={{ marginTop: '20px' }}>
+        <p>Tu sesión está activa y validada por Microsoft Entra ID.</p>
+        
+        {/* Componente para probar peticiones con token */}
+        <ProtectedData />
+      </main>
+    </div>
+  );
+};
+
+export default function App() {
+  return (
+    <div>
+      <AuthenticatedTemplate>
+        <MainContent />
+      </AuthenticatedTemplate>
+
+      <UnauthenticatedTemplate>
+        <LoginScreen />
+      </UnauthenticatedTemplate>
     </div>
   );
 }

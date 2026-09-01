@@ -24,3 +24,12 @@ export const msalConfig: Configuration = {
 export const loginRequest = {
   scopes: ['User.Read'],
 };
+
+
+
+export const protectedResources = {
+  apiBackend: {
+    endpoint: `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}`,
+    scopes: [import.meta.env.VITE_API_SCOPE || 'User.Read'],
+  },
+};
