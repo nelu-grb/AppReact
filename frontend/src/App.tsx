@@ -1,64 +1,52 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { 
   AuthenticatedTemplate, 
   UnauthenticatedTemplate, 
   useMsal 
 } from '@azure/msal-react';
 import { ProtectedData } from './ProtectedData';
+import { Navbar } from './Navbar';
+import { loginRequest } from './authConfig';
+import './App.css';
 
-const LoginScreen = () => {
+const LoginScreen: React.FC = () => {
   const { instance } = useMsal();
 
   const handleLogin = () => {
-    instance.loginPopup().catch((error) => console.error(error));
+    instance.loginRedirect(loginRequest);
   };
 
   return (
-    <div style={{ textAlign: 'center', marginTop: '50px' }}>
-      <h1>Bienvenido a la Aplicación</h1>
-      <p>Debes iniciar sesión con tu cuenta corporativa para continuar.</p>
-      <button onClick={handleLogin} style={{ padding: '10px 20px', cursor: 'pointer' }}>
-        Iniciar Sesión con Microsoft
-      </button>
-    </div>
-  );
-};
-
-const MainContent = () => {
-  const { instance, accounts } = useMsal();
-  const currentAccount = accounts[0];
-
-  const handleLogout = () => {
-    instance.logoutPopup().catch((error) => console.error(error));
-  };
-
-  return (
-    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto', fontFamily: 'sans-serif' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', paddingBottom: '15px' }}>
-        <h2>Panel Principal</h2>
-        <div>
-          <span>Hola, <strong>{currentAccount?.name || currentAccount?.username}</strong></span>
-          <button onClick={handleLogout} style={{ marginLeft: '15px', padding: '6px 12px', cursor: 'pointer' }}>
-            Cerrar Sesión
-          </button>
-        </div>
-      </header>
-
-      <main style={{ marginTop: '20px' }}>
-        <p>Tu sesión está activa y validada por Microsoft Entra ID.</p>
-        
-        {/* Componente para probar peticiones con token */}
-        <ProtectedData />
-      </main>
+    <div className="login-wrapper">
+      <div className="login-card">
+        <h1 style={{ marginTop: 0, fontSize: '1.75rem' }}>Bienvenido</h1>
+        <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>
+          Debes iniciar sesión con tu cuenta corporativa para continuar.
+        </p>
+        <button className="btn-primary" onClick={handleLogin} style={{ width: '100%' }}>
+          Iniciar Sesión con Microsoft
+        </button>
+      </div>
     </div>
   );
 };
 
 export default function App() {
+  const { instance } = useMsal();
+
+  useEffect(() => {
+    instance.handleRedirectPromise().catch((error) => {
+      console.error("Error al procesar redirect:", error);
+    });
+  }, [instance]);
+
   return (
-    <div>
+    <div className="app-container">
       <AuthenticatedTemplate>
-        <MainContent />
+        <Navbar />
+        <main className="main-wrapper">
+          <ProtectedData />
+        </main>
       </AuthenticatedTemplate>
 
       <UnauthenticatedTemplate>

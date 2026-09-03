@@ -1,30 +1,23 @@
-// src/Navbar.tsx (o dentro de App.tsx)
 import React from 'react';
-import { useAuth } from './useAuth';
+import { useMsal } from '@azure/msal-react';
 
+export const Navbar: React.FC = () => {
+  const { instance, accounts } = useMsal();
+  const currentAccount = accounts[0] || instance.getActiveAccount();
 
-export const AppLayout = () => {
-  const { isLoggedIn, login, logout } = useAuth();
+  const handleLogout = () => {
+    instance.logoutRedirect();
+  };
 
   return (
-    <div>
-      <nav style={{ padding: '12px', borderBottom: '1px solid #ccc', marginBottom: '20px' }}>
-        {!isLoggedIn && (
-          <button onClick={login}>Iniciar sesión</button>
-        )}
-
-        {isLoggedIn && (
-          <button onClick={logout}>Cerrar sesión</button>
-        )}
-      </nav>
-
-      {/* Equivalente a <router-outlet></router-outlet> */}
-      <main>
-        {/* Si usas React Router: <Outlet /> */}
-        {/* O contenido dinámico/rutas de tu aplicación */}
-      </main>
-    </div>
+    <header className="navbar">
+      <div className="navbar-brand">Panel de Control</div>
+      <div className="navbar-user">
+        <span>Hola, <strong>{currentAccount?.name || currentAccount?.username}</strong></span>
+        <button className="btn-logout" onClick={handleLogout}>
+          Cerrar Sesión
+        </button>
+      </div>
+    </header>
   );
 };
-
-export default AppLayout;
