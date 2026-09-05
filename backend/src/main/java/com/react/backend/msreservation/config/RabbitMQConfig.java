@@ -1,17 +1,20 @@
-package com.andesstay.reservations.config;
+package com.react.backend.msreservation.config;
 
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class RabbitMQConfig {
 
+    // Exchanges
     public static final String EXCHANGE_DIRECT = "cmd.direct";
     public static final String EXCHANGE_TOPIC = "cmd.topic";
     public static final String EXCHANGE_DLX = "cmd.dead.dlx";
 
+    // Queues
     public static final String QUEUE_EMAIL = "q.cmd.email";
     public static final String QUEUE_HOUSEKEEPING = "q.cmd.housekeeping";
     public static final String QUEUE_VOUCHER = "q.cmd.voucher";
@@ -56,22 +59,22 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public Binding emailBinding(Queue emailQueue, DirectExchange directExchange) {
+    public Binding bindingEmailDirect(Queue emailQueue, DirectExchange directExchange) {
         return BindingBuilder.bind(emailQueue).to(directExchange).with("email.send");
     }
 
     @Bean
-    public Binding housekeepingBinding(Queue housekeepingQueue, DirectExchange directExchange) {
+    public Binding bindingHousekeepingDirect(Queue housekeepingQueue, DirectExchange directExchange) {
         return BindingBuilder.bind(housekeepingQueue).to(directExchange).with("housekeeping.ticket");
     }
 
     @Bean
-    public Binding voucherBinding(Queue voucherQueue, DirectExchange directExchange) {
+    public Binding bindingVoucherDirect(Queue voucherQueue, DirectExchange directExchange) {
         return BindingBuilder.bind(voucherQueue).to(directExchange).with("voucher.gen");
     }
 
     @Bean
-    public Jackson2JsonMessageConverter producerJackson2MessageConverter() {
+    public MessageConverter jsonMessageConverter() {
         return new Jackson2JsonMessageConverter();
     }
 }

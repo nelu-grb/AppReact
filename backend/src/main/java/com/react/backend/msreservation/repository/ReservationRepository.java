@@ -1,7 +1,7 @@
-package com.andesstay.reservations.repository;
+package com.react.backend.msreservation.repository;
 
-import com.andesstay.reservations.model.Reservation;
-import com.andesstay.reservations.model.ReservationStatus;
+import com.react.backend.msreservation.model.Reservation;
+import com.react.backend.msreservation.model.ReservationStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

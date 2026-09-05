@@ -1,33 +1,46 @@
 version: '3.8'
-services:
-  oracle:
-    image: gvenzl/oracle-free:latest
-    environment:
-      - ORACLE_PASSWORD=andesstay_pass
-      - APP_USER=ANDESSTAY_USER
-      - APP_USER_PASSWORD=andesstay_pass
-    ports:
-      - "1521:1521"
 
+services:
+  # Base de datos Oracle XE
+  oracle-db:
+    image: gvenzl/oracle-xe:21-slim
+    container_name: oracle-db
+    ports:
+      - "1522:1521"  # <--- Cambia el puerto externo de 1521 a 1522
+    environment:
+      - ORACLE_PASSWORD=andesstay123
+      - APP_USER=andesstay
+      - APP_USER_PASSWORD=andesstay123
+
+  # RabbitMQ con Consola de Administración
   rabbitmq:
     image: rabbitmq:3-management
+    container_name: rabbitmq
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "5672:5672"   # Puerto AMQP
+      - "15672:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
 
+  # Kafka + Zookeeper
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
-    depends_on:
-      - zookeeper
+    container_name: kafka
     ports:
       - "9092:9092"
+    depends_on:
+      - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
