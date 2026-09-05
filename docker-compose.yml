@@ -1,16 +1,19 @@
 version: '3.8'
 
 services:
-  # Base de datos Oracle XE
-  oracle-db:
-    image: gvenzl/oracle-xe:21-slim
-    container_name: oracle-db
+  # Base de datos PostgreSQL
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: andesstay-postgres
     ports:
-      - "1522:1521"  # <--- Cambia el puerto externo de 1521 a 1522
+      - "5432:5432"
     environment:
-      - ORACLE_PASSWORD=andesstay123
-      - APP_USER=andesstay
-      - APP_USER_PASSWORD=andesstay123
+      POSTGRES_DB: andesstay_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: andesstay_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
 
   # RabbitMQ con Consola de Administración
   rabbitmq:
@@ -44,3 +47,6 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+volumes:
+  postgres_data:
