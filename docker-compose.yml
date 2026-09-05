@@ -5,7 +5,7 @@ services:
     environment:
       - ORACLE_PASSWORD=andesstay_pass
       - APP_USER=ANDESSTAY_USER
-      - APP_PASSWORD=andesstay_pass
+      - APP_USER_PASSWORD=andesstay_pass
     ports:
       - "1521:1521"
 
@@ -13,15 +13,15 @@ services:
     image: rabbitmq:3-management
     ports:
       - "5672:5672"
-      - "15672:15672" # Interfaz Web de RabbitMQ
+      - "15672:15672"
 
   zookeeper:
-    image: confluentinc/cp-zookeeper:latest
+    image: confluentinc/cp-zookeeper:7.5.0
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
 
   kafka:
-    image: confluentinc/cp-kafka:latest
+    image: confluentinc/cp-kafka:7.5.0
     depends_on:
       - zookeeper
     ports:
