@@ -1,0 +1,33 @@
+version: '3.8'
+services:
+  oracle:
+    image: gvenzl/oracle-free:latest
+    environment:
+      - ORACLE_PASSWORD=andesstay_pass
+      - APP_USER=ANDESSTAY_USER
+      - APP_PASSWORD=andesstay_pass
+    ports:
+      - "1521:1521"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672" # Interfaz Web de RabbitMQ
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
