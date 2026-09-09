@@ -59,5 +59,25 @@ services:
       postgres-db:
         condition: service_healthy
 
+  ms-bff:
+    build:
+      context: ./backend/ms-bff
+      dockerfile: Dockerfile
+    container_name: ms-bff
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/andesstay_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      ms-catalog:
+        condition: service_started
+      ms-reservations:
+        condition: service_started
+
 volumes:
   postgres_data:
