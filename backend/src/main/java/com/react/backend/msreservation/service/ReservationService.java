@@ -3,7 +3,6 @@ package com.react.backend.msreservation.service;
 import com.react.backend.msreservation.dto.ReservationRequest;
 import com.react.backend.msreservation.dto.ReservationResponse;
 import com.react.backend.msreservation.dto.StatusUpdateRequest;
-import com.react.backend.msreservation.messaging.KafkaPublisher;
 import com.react.backend.msreservation.messaging.RabbitMQPublisher;
 import com.react.backend.msreservation.model.Reservation;
 import com.react.backend.msreservation.model.ReservationStatus;
@@ -22,7 +21,6 @@ public class ReservationService {
 
     private final ReservationRepository reservationRepository;
     private final RabbitMQPublisher rabbitPublisher;
-    private final KafkaPublisher kafkaPublisher;
 
     @Transactional
     public ReservationResponse createReservation(ReservationRequest request, String currentUser) {
@@ -45,7 +43,6 @@ public class ReservationService {
                 "Tu reserva #" + saved.getId() + " ha sido registrada con éxito.", 
                 correlationId
         );
-        kafkaPublisher.publishReservationEvent("RESERVATION_CREATED", saved, currentUser);
 
         return mapToResponse(saved);
     }
@@ -95,8 +92,6 @@ public class ReservationService {
             );
             rabbitPublisher.publishVoucherGenCommand(updated.getId(), correlationId);
         }
-
-        kafkaPublisher.publishReservationEvent("RESERVATION_STATUS_UPDATED", updated, currentUser);
 
         return mapToResponse(updated);
     }

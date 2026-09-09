@@ -1,50 +1,51 @@
 package com.react.backend.msreservation.messaging;
 
-import com.react.backend.msreservation.config.RabbitMQConfig;
-import com.react.backend.msreservation.dto.MessageEnvelope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
-@Service
+@Component
 @RequiredArgsConstructor
 public class RabbitMQPublisher {
 
     private final RabbitTemplate rabbitTemplate;
 
-    public void publishEmailCommand(String guestEmail, String subject, String body, String correlationId) {
-        MessageEnvelope<Map<String, String>> envelope = MessageEnvelope.<Map<String, String>>builder()
-                .type("EMAIL_SEND")
-                .traceId(UUID.randomUUID().toString())
-                .correlationId(correlationId)
-                .payload(Map.of("email", guestEmail, "subject", subject, "body", body))
-                .build();
+    private static final String EXCHANGE = "cmd.direct";
+    private static final String ROUTING_KEY_EMAIL = "email.send";
+    private static final String ROUTING_KEY_HOUSEKEEPING = "housekeeping.ticket";
+    private static final String ROUTING_KEY_VOUCHER = "voucher.gen";
 
-        rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_DIRECT, "email.send", envelope);
+    public void publishEmailCommand(String recipient, String subject, String body, String correlationId) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("type", "EMAIL");
+        payload.put("recipient", recipient);
+        payload.put("subject", subject);
+        payload.put("message", body);
+        payload.put("correlationId", correlationId);
+
+        rabbitTemplate.convertAndSend(EXCHANGE, ROUTING_KEY_EMAIL, payload);
     }
 
-    public void publishHousekeepingTicket(Long unitId, String detail, String correlationId) {
-        MessageEnvelope<Map<String, Object>> envelope = MessageEnvelope.<Map<String, Object>>builder()
-                .type("HOUSEKEEPING_TICKET")
-                .traceId(UUID.randomUUID().toString())
-                .correlationId(correlationId)
-                .payload(Map.of("unitId", unitId, "detail", detail))
-                .build();
+    public void publishHousekeepingTicket(Object unitId, String description, String correlationId) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("reservationId", correlationId);
+        payload.put("roomId", String.valueOf(unitId));
+        payload.put("taskType", description);
+        payload.put("priority", "ALTA");
 
-        rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_DIRECT, "housekeeping.ticket", envelope);
+        rabbitTemplate.convertAndSend(EXCHANGE, ROUTING_KEY_HOUSEKEEPING, payload);
     }
 
     public void publishVoucherGenCommand(Long reservationId, String correlationId) {
-        MessageEnvelope<Map<String, Object>> envelope = MessageEnvelope.<Map<String, Object>>builder()
-                .type("VOUCHER_GEN")
-                .traceId(UUID.randomUUID().toString())
-                .correlationId(correlationId)
-                .payload(Map.of("reservationId", reservationId))
-                .build();
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("reservationId", String.valueOf(reservationId));
+        payload.put("customerEmail", "");
+        payload.put("voucherCode", "VOUCHER-" + reservationId);
+        payload.put("amount", 0.0);
 
-        rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_DIRECT, "voucher.gen", envelope);
+        rabbitTemplate.convertAndSend(EXCHANGE, ROUTING_KEY_VOUCHER, payload);
     }
 }
