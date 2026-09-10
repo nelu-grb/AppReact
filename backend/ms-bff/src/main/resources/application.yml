@@ -1,0 +1,15 @@
+server:
+  port: 8080
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://login.microsoftonline.com/c46750c7-b258-426e-9333-5640bb4ecc6e/v2.0
+
+downstream:
+  reservations:
+    base-url: http://reservations-svc:8081
+  catalog:
+    base-url: http://catalog-svc:8082
