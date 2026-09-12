@@ -71,4 +71,12 @@ public class ReservationBffController {
                 .retrieve()
                 .bodyToMono(ReservationResponse.class);
     }
+
+    @GetMapping("/by-unit/{unitId}")
+    public Mono<List<ReservationResponse>> getByUnit(@PathVariable Long unitId) {
+        return reservationsWebClient.get()
+                .uri("/api/reservations/by-unit/{unitId}", unitId)
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<List<ReservationResponse>>() {});
+    }
 }
