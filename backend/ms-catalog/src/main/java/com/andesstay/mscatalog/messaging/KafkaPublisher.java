@@ -2,6 +2,8 @@ package com.andesstay.mscatalog.messaging;
 
 import com.andesstay.mscatalog.model.Unit;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
@@ -9,6 +11,7 @@ import java.util.Map;
 @Service
 public class KafkaPublisher {
     public static final String TOPIC_CATALOG = "catalog.events";
+    private static final Logger logger = LoggerFactory.getLogger(KafkaPublisher.class);
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
@@ -26,6 +29,15 @@ public class KafkaPublisher {
                 "availability", unit.getAvailability(),
                 "actor", actor == null ? "SYSTEM" : actor,
                 "timestamp", System.currentTimeMillis());
-        kafkaTemplate.send(TOPIC_CATALOG, String.valueOf(unit.getUnitId()), event);
+        try {
+            kafkaTemplate.send(TOPIC_CATALOG, String.valueOf(unit.getUnitId()), event)
+                    .whenComplete((result, error) -> {
+                        if (error != null) {
+                            logger.warn("Could not publish catalog event {} for unit {}", eventType, unit.getUnitId(), error);
+                        }
+                    });
+        } catch (RuntimeException error) {
+            logger.warn("Could not publish catalog event {} for unit {}", eventType, unit.getUnitId(), error);
+        }
     }
 }

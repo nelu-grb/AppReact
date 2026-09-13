@@ -50,4 +50,27 @@ public class Unit {
 
     @Column(name = "MAX_OCCUPANCY", nullable = false)
     private Integer maxOccupancy;
+
+    public Long getUnitId() { return unitId; }
+    public void setUnitId(Long unitId) { this.unitId = unitId; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+    public String getAddress() { return address; }
+    public void setAddress(String address) { this.address = address; }
+    public UnitType getType() { return type; }
+    public void setType(UnitType type) { this.type = type; }
+    public String getCity() { return city; }
+    public void setCity(String city) { this.city = city; }
+    public Boolean getAvailability() { return availability; }
+    public void setAvailability(Boolean availability) { this.availability = availability; }
+    public Integer getRooms() { return rooms; }
+    public void setRooms(Integer rooms) { this.rooms = rooms; }
+    public Integer getBathrooms() { return bathrooms; }
+    public void setBathrooms(Integer bathrooms) { this.bathrooms = bathrooms; }
+    public BigDecimal getPricePerNight() { return pricePerNight; }
+    public void setPricePerNight(BigDecimal pricePerNight) { this.pricePerNight = pricePerNight; }
+    public Integer getMaxOccupancy() { return maxOccupancy; }
+    public void setMaxOccupancy(Integer maxOccupancy) { this.maxOccupancy = maxOccupancy; }
 }
