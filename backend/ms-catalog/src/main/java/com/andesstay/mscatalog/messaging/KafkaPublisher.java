@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.Map;
 
 @Service
@@ -29,15 +30,17 @@ public class KafkaPublisher {
                 "availability", unit.getAvailability(),
                 "actor", actor == null ? "SYSTEM" : actor,
                 "timestamp", System.currentTimeMillis());
-        try {
-            kafkaTemplate.send(TOPIC_CATALOG, String.valueOf(unit.getUnitId()), event)
-                    .whenComplete((result, error) -> {
-                        if (error != null) {
-                            logger.warn("Could not publish catalog event {} for unit {}", eventType, unit.getUnitId(), error);
-                        }
-                    });
-        } catch (RuntimeException error) {
-            logger.warn("Could not publish catalog event {} for unit {}", eventType, unit.getUnitId(), error);
-        }
+        CompletableFuture.runAsync(() -> {
+            try {
+                kafkaTemplate.send(TOPIC_CATALOG, String.valueOf(unit.getUnitId()), event)
+                        .whenComplete((result, error) -> {
+                            if (error != null) {
+                                logger.warn("Could not publish catalog event {} for unit {}", eventType, unit.getUnitId(), error);
+                            }
+                        });
+            } catch (RuntimeException error) {
+                logger.warn("Could not publish catalog event {} for unit {}", eventType, unit.getUnitId(), error);
+            }
+        });
     }
 }
