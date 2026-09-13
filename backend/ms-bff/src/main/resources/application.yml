@@ -10,6 +10,6 @@ spring:
 
 downstream:
   reservations:
-    base-url: http://reservations-svc:8081
+    base-url: http://ms-reservations:8081
   catalog:
-    base-url: http://catalog-svc:8082
+    base-url: http://ms-catalog:8082

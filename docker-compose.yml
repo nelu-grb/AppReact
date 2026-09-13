@@ -17,36 +17,26 @@ services:
       timeout: 5s
       retries: 5
 
-  kafka:
-    image: apache/kafka:latest
-    container_name: kafka
-    restart: always
+  ms-catalog:
+    build:
+      context: ./backend/ms-catalog
+      dockerfile: Dockerfile
+    container_name: ms-catalog
+    restart: unless-stopped
     ports:
-      - "9092:9092"
+      - "8082:8082"
     environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: 'broker,controller'
-      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093'
-      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:9092'
-      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT'
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:9093'
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/9092'"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-
-  rabbitmq:
-    image: rabbitmq:3-management
-    container_name: rabbitmq
-    ports:
-      - "5672:5672"
-      - "15672:15672"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/andesstay_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_HOST}
+      SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST}
+      SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT}
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+    depends_on:
+      postgres-db:
+        condition: service_healthy
 
   ms-reservations:
     build:
@@ -56,16 +46,33 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/andesstay_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
-      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      SPRING_RABBITMQ_HOST: rabbitmq
-      SPRING_RABBITMQ_PORT: 5672
-    ports:
-      - "8081:8081"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_HOST}
+      SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST}
+      SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT}
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
     depends_on:
       postgres-db:
         condition: service_healthy
-      rabbitmq:
+
+  ms-bff:
+    build:
+      context: ./backend/ms-bff
+      dockerfile: Dockerfile
+    container_name: ms-bff
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/andesstay_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      ms-catalog:
+        condition: service_started
+      ms-reservations:
         condition: service_started
       kafka:
         condition: service_started
