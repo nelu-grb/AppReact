@@ -55,4 +55,9 @@ public class ReservationController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return ResponseEntity.ok(reservationService.getReservations(status, from, to));
     }
+
+    @GetMapping("/by-unit/{unitId}")
+    public ResponseEntity<List<ReservationResponse>> getByUnit(@PathVariable Long unitId) {
+        return ResponseEntity.ok(reservationService.getReservationsByUnit(unitId));
+    }
 }

@@ -23,9 +23,12 @@ public class ReservationService {
     private final ReservationRepository reservationRepository;
     private final RabbitMQPublisher rabbitPublisher;
     private final KafkaPublisher kafkaPublisher;
+    private final UnitValidationService unitValidationService;
 
     @Transactional
     public ReservationResponse createReservation(ReservationRequest request, String currentUser) {
+        unitValidationService.validateUnitAvailability(request.getUnitId(), request.getStartDate(), request.getEndDate());
+
         Reservation reservation = Reservation.builder()
                 .unitId(request.getUnitId())
                 .guestId(request.getGuestId())
@@ -58,6 +61,12 @@ public class ReservationService {
 
     public List<ReservationResponse> getReservations(ReservationStatus status, LocalDate from, LocalDate to) {
         return reservationRepository.findByFilters(status, from, to).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<ReservationResponse> getReservationsByUnit(Long unitId) {
+        return reservationRepository.findByUnitId(unitId).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }

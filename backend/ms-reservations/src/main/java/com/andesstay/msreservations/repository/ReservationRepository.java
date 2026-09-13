@@ -22,4 +22,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             @Param("fromDate") LocalDate fromDate,
             @Param("toDate") LocalDate toDate
     );
+
+    @Query("SELECT r FROM Reservation r WHERE r.unitId = :unitId")
+    List<Reservation> findByUnitId(@Param("unitId") Long unitId);
 }
