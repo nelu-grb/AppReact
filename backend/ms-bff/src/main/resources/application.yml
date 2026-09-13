@@ -6,9 +6,8 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: https://andesstay.ciamlogin.com/a1c2bfc6-a6aa-4f55-8d5d-0f493a955062/v2.0/
-          jwk-set-uri: https://andesstay.ciamlogin.com/a1c2bfc6-a6aa-4f55-8d5d-0f493a955062/discovery/v2.0/keys
-
+          issuer-uri: https://a1c2bfc6-a6aa-4f55-8d5d-0f493a955062.ciamlogin.com/a1c2bfc6-a6aa-4f55-8d5d-0f493a955062/
+          jwk-set-uri: https://a1c2bfc6-a6aa-4f55-8d5d-0f493a955062.ciamlogin.com/a1c2bfc6-a6aa-4f55-8d5d-0f493a955062/discovery/v2.0/keys
 downstream:
   reservations:
     base-url: http://ms-reservations:8081
