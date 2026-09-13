@@ -15,7 +15,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/reservations")
+@RequestMapping("/reservations")
 public class ReservationBffController {
 
     private final WebClient reservationsWebClient;

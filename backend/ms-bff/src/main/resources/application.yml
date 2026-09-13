@@ -6,7 +6,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: https://a1c2bfc6-a6aa-4f55-8d5d-0f493a955062.ciamlogin.com/a1c2bfc6-a6aa-4f55-8d5d-0f493a955062/
+          issuer-uri: 
           jwk-set-uri: https://a1c2bfc6-a6aa-4f55-8d5d-0f493a955062.ciamlogin.com/a1c2bfc6-a6aa-4f55-8d5d-0f493a955062/discovery/v2.0/keys
 downstream:
   reservations:
