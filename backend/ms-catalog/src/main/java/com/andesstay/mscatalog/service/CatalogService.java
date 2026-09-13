@@ -2,6 +2,7 @@ package com.andesstay.mscatalog.service;
 
 import com.andesstay.mscatalog.dto.UnitRequest;
 import com.andesstay.mscatalog.dto.UnitResponse;
+import com.andesstay.mscatalog.dto.AvailabilityResponse;
 import com.andesstay.mscatalog.messaging.KafkaPublisher;
 import com.andesstay.mscatalog.model.Unit;
 import com.andesstay.mscatalog.model.UnitType;
@@ -31,6 +32,18 @@ public class CatalogService {
     @Transactional(readOnly = true)
     public UnitResponse getById(Long unitId) {
         return toResponse(findUnit(unitId));
+    }
+
+    @Transactional(readOnly = true)
+    public AvailabilityResponse checkAvailability(Long unitId, java.time.LocalDate from, java.time.LocalDate to) {
+        Unit unit = findUnit(unitId);
+        return new AvailabilityResponse(
+                unit.getUnitId(),
+                unit.getName(),
+                from,
+                to,
+                Boolean.TRUE.equals(unit.getAvailability()),
+                List.of());
     }
 
     @Transactional(readOnly = true)

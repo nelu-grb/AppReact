@@ -2,6 +2,7 @@ package com.andesstay.mscatalog.controller;
 
 import com.andesstay.mscatalog.dto.UnitRequest;
 import com.andesstay.mscatalog.dto.UnitResponse;
+import com.andesstay.mscatalog.dto.AvailabilityResponse;
 import com.andesstay.mscatalog.model.UnitType;
 import com.andesstay.mscatalog.service.CatalogService;
 import jakarta.validation.Valid;
@@ -12,6 +13,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/catalog/units")
@@ -32,6 +34,13 @@ public class CatalogController {
     @GetMapping("/{unitId}")
     public UnitResponse getById(@PathVariable Long unitId) {
         return catalogService.getById(unitId);
+    }
+
+    @GetMapping("/{unitId}/availability")
+    public AvailabilityResponse checkAvailability(@PathVariable Long unitId,
+                                                   @RequestParam LocalDate from,
+                                                   @RequestParam LocalDate to) {
+        return catalogService.checkAvailability(unitId, from, to);
     }
 
     @GetMapping

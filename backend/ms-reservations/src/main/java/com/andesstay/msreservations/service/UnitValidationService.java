@@ -45,7 +45,7 @@ public class UnitValidationService {
     private UnitDto getUnit(Long unitId) {
         try {
             return catalogWebClient.get()
-                    .uri("/api/units/{id}", unitId)
+                    .uri("/api/catalog/units/{id}", unitId)
                     .retrieve()
                     .bodyToMono(UnitDto.class)
                     .block();
@@ -62,7 +62,7 @@ public class UnitValidationService {
         try {
             return catalogWebClient.get()
                     .uri(uriBuilder -> uriBuilder
-                            .path("/api/units/{id}/availability")
+                            .path("/api/catalog/units/{id}/availability")
                             .queryParam("from", startDate)
                             .queryParam("to", endDate)
                             .build(unitId))
