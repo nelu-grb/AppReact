@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.security.web.server.context.NoOpServerSecurityContextRepository;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
@@ -19,7 +20,8 @@ public class SecurityConfig {
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .csrf(ServerHttpSecurity.CsrfSpec::disable)
+            .csrf(csrf -> csrf.disable())
+            .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
             .authorizeExchange(exchange -> exchange.anyExchange().authenticated())
             .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {}));
         return http.build();
