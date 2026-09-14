@@ -87,9 +87,13 @@ services:
     ports:
       - "8083:8083"
     environment:
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx256m
       DB_HOST: postgres-db
       DB_PORT: 5432
-      KAFKA_HOST: ${KAFKA_HOST}
+      DB_NAME: andesstay_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      KAFKA_HOST: kafka:29092
     depends_on:
       postgres-db:
         condition: service_healthy
@@ -102,8 +106,11 @@ services:
     ports:
       - "8084:8084"
     environment:
-      RABBITMQ_HOST: ${RABBITMQ_HOST}
-      RABBITMQ_PORT: ${RABBITMQ_PORT}
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx256m
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
       RESEND_API_KEY: ${RESEND_API_KEY}
       RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-onboarding@resend.dev}
     depends_on:
@@ -118,9 +125,13 @@ services:
     ports:
       - "8085:8085"
     environment:
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx256m
       DB_HOST: postgres-db
       DB_PORT: 5432
-      KAFKA_HOST: ${KAFKA_HOST}
+      DB_NAME: andesstay_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      KAFKA_HOST: kafka:29092
     depends_on:
       postgres-db:
         condition: service_healthy

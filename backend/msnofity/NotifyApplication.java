@@ -7,8 +7,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class NotifyApplication {
 
     public static void main(String[] args) {
-        // Sobrescribe el puerto del application.properties solo para este microservicio
-        System.setProperty("server.port", "8082"); 
+        System.setProperty("server.port", "8084");
         SpringApplication.run(NotifyApplication.class, args);
     }
 }
