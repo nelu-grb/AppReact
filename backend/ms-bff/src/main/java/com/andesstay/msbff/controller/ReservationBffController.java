@@ -30,7 +30,7 @@ public class ReservationBffController {
                                              @AuthenticationPrincipal Jwt jwt) {
         return reservationsWebClient.post()
                 .uri("/api/reservations")
-                .header("X-Actor", jwt.getSubject())
+                .header("X-Actor", actorName(jwt))
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(ReservationResponse.class);
@@ -66,11 +66,22 @@ public class ReservationBffController {
                                                    @AuthenticationPrincipal Jwt jwt) {
         return reservationsWebClient.put()
                 .uri("/api/reservations/{id}/status", id)
-                .header("X-Actor", jwt.getSubject())
+                .header("X-Actor", actorName(jwt))
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(ReservationResponse.class);
     }
+
+        private String actorName(Jwt jwt) {
+                String preferredUsername = jwt.getClaimAsString("preferred_username");
+                if (preferredUsername != null && !preferredUsername.isBlank()) return preferredUsername;
+
+                String uniqueName = jwt.getClaimAsString("unique_name");
+                if (uniqueName != null && !uniqueName.isBlank()) return uniqueName;
+
+                String name = jwt.getClaimAsString("name");
+                return name != null && !name.isBlank() ? name : jwt.getSubject();
+        }
 
     @GetMapping("/by-unit/{unitId}")
     public Mono<List<ReservationResponse>> getByUnit(@PathVariable Long unitId) {
