@@ -4,10 +4,11 @@ import com.andesstay.msreservations.dto.AvailabilityDto;
 import com.andesstay.msreservations.dto.UnitDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
-import reactor.core.publisher.Mono;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 
@@ -29,12 +30,16 @@ public class UnitValidationService {
         // First, verify the unit exists
         UnitDto unit = getUnit(unitId);
         if (unit == null) {
-            throw new IllegalArgumentException("Unidad no existe con ID: " + unitId);
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Unidad no existe con ID: " + unitId
+            );
         }
 
         AvailabilityDto availability = checkAvailability(unitId, startDate, endDate);
         if (!availability.getAvailable()) {
-            throw new IllegalArgumentException(
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
                     "Unidad no está disponible para las fechas solicitadas: " + startDate + " a " + endDate
             );
         }
