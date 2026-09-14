@@ -83,6 +83,14 @@ public class ReservationBffController {
                 return name != null && !name.isBlank() ? name : jwt.getSubject();
         }
 
+        @DeleteMapping("/{id}")
+        public Mono<Void> delete(@PathVariable Long id) {
+                return reservationsWebClient.delete()
+                                .uri("/api/reservations/{id}", id)
+                                .retrieve()
+                                .bodyToMono(Void.class);
+        }
+
     @GetMapping("/by-unit/{unitId}")
     public Mono<List<ReservationResponse>> getByUnit(@PathVariable Long unitId) {
         return reservationsWebClient.get()

@@ -10,8 +10,10 @@ import com.andesstay.msreservations.model.ReservationStatus;
 import com.andesstay.msreservations.repository.ReservationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -75,6 +77,21 @@ public class ReservationService {
         return reservationRepository.findByUnitId(unitId).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void deleteCancelledReservation(Long id) {
+        Reservation reservation = reservationRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reserva no encontrada"));
+
+        if (reservation.getStatus() != ReservationStatus.CANCELADA) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Solo se pueden eliminar reservas canceladas"
+            );
+        }
+
+        reservationRepository.delete(reservation);
     }
 
     @Transactional

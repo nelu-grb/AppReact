@@ -62,4 +62,10 @@ public class ReservationController {
     public ResponseEntity<List<ReservationResponse>> getByUnit(@PathVariable Long unitId) {
         return ResponseEntity.ok(reservationService.getReservationsByUnit(unitId));
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteCancelled(@PathVariable Long id) {
+        reservationService.deleteCancelledReservation(id);
+        return ResponseEntity.noContent().build();
+    }
 }
