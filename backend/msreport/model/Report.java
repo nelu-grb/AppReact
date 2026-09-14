@@ -12,6 +12,7 @@ public class Report {
     private Long id;
 
     private String eventType;
+    @Column(columnDefinition = "TEXT")
     private String description;
     private LocalDateTime createdAt;
 
