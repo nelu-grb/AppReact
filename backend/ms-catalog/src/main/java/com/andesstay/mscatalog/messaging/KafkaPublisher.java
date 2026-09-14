@@ -12,6 +12,7 @@ import java.util.Map;
 @Service
 public class KafkaPublisher {
     public static final String TOPIC_CATALOG = "catalog.events";
+    public static final String TOPIC_AUDIT = "audit.timeline";
     private static final Logger logger = LoggerFactory.getLogger(KafkaPublisher.class);
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
@@ -33,11 +34,12 @@ public class KafkaPublisher {
         CompletableFuture.runAsync(() -> {
             try {
                 kafkaTemplate.send(TOPIC_CATALOG, String.valueOf(unit.getUnitId()), event)
-                        .whenComplete((result, error) -> {
-                            if (error != null) {
-                                logger.warn("Could not publish catalog event {} for unit {}", eventType, unit.getUnitId(), error);
-                            }
-                        });
+                    .whenComplete((result, error) -> {
+                        if (error != null) {
+                            logger.warn("Could not publish catalog event {} for unit {}", eventType, unit.getUnitId(), error);
+                        }
+                    });
+                kafkaTemplate.send(TOPIC_AUDIT, String.valueOf(unit.getUnitId()), event);
             } catch (RuntimeException error) {
                 logger.warn("Could not publish catalog event {} for unit {}", eventType, unit.getUnitId(), error);
             }

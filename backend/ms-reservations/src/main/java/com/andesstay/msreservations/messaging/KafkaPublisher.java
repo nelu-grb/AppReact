@@ -24,6 +24,10 @@ public class KafkaPublisher {
         event.put("unitId", reservation.getUnitId());
         event.put("guestId", reservation.getGuestId());
         event.put("status", reservation.getStatus().name());
+        event.put("startDate", reservation.getStartDate().toString());
+        event.put("endDate", reservation.getEndDate().toString());
+        event.put("createdAt", reservation.getCreatedAt().toString());
+        event.put("updatedAt", reservation.getUpdatedAt().toString());
         event.put("actor", actor != null ? actor : "SYSTEM");
         event.put("timestamp", System.currentTimeMillis());
 

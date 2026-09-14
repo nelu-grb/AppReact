@@ -1,0 +1,6 @@
+com\react\backend\msreport\listener\ReportEventListener.class
+com\react\backend\msreport\controller\ReportController.class
+com\react\backend\msreport\repository\ReportRepository.class
+com\react\backend\msreport\ReportApplication.class
+com\react\backend\msreport\service\KpiService.class
+com\react\backend\msreport\model\Report.class

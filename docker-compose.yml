@@ -79,5 +79,51 @@ services:
       ms-reservations:
         condition: service_started
 
+  msaudit:
+    build:
+      context: ./backend/msaudit
+    container_name: msaudit
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    environment:
+      DB_HOST: postgres-db
+      DB_PORT: 5432
+      KAFKA_HOST: ${KAFKA_HOST}
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+
+  msnofity:
+    build:
+      context: ./backend/msnofity
+    container_name: msnofity
+    restart: unless-stopped
+    ports:
+      - "8084:8084"
+    environment:
+      RABBITMQ_HOST: ${RABBITMQ_HOST}
+      RABBITMQ_PORT: ${RABBITMQ_PORT}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-onboarding@resend.dev}
+    depends_on:
+      ms-reservations:
+        condition: service_started
+
+  msreport:
+    build:
+      context: ./backend/msreport
+    container_name: msreport
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    environment:
+      DB_HOST: postgres-db
+      DB_PORT: 5432
+      KAFKA_HOST: ${KAFKA_HOST}
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+
 volumes:
   postgres_data:
