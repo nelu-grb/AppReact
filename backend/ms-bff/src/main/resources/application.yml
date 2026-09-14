@@ -13,3 +13,7 @@ downstream:
     base-url: http://ms-reservations:8081
   catalog:
     base-url: http://ms-catalog:8082
+  audit:
+    base-url: http://msaudit:8083
+  report:
+    base-url: http://msreport:8085

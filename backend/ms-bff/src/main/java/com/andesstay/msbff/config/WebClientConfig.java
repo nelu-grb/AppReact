@@ -17,4 +17,14 @@ public class WebClientConfig {
     public WebClient catalogWebClient(@Value("${downstream.catalog.base-url}") String baseUrl) {
         return WebClient.builder().baseUrl(baseUrl).build();
     }
+
+    @Bean
+    public WebClient auditWebClient(@Value("${downstream.audit.base-url}") String baseUrl) {
+        return WebClient.builder().baseUrl(baseUrl).build();
+    }
+
+    @Bean
+    public WebClient reportWebClient(@Value("${downstream.report.base-url}") String baseUrl) {
+        return WebClient.builder().baseUrl(baseUrl).build();
+    }
 }

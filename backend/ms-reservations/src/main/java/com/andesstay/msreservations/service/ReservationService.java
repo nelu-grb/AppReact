@@ -9,6 +9,7 @@ import com.andesstay.msreservations.model.Reservation;
 import com.andesstay.msreservations.model.ReservationStatus;
 import com.andesstay.msreservations.repository.ReservationRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +25,9 @@ public class ReservationService {
     private final RabbitMQPublisher rabbitPublisher;
     private final KafkaPublisher kafkaPublisher;
     private final UnitValidationService unitValidationService;
+
+        @Value("${notifications.email.enabled:false}")
+        private boolean emailNotificationsEnabled;
 
     @Transactional
     public ReservationResponse createReservation(ReservationRequest request, String currentUser) {
@@ -42,12 +46,14 @@ public class ReservationService {
         Reservation saved = reservationRepository.save(reservation);
 
         String correlationId = "RES-" + saved.getId();
-        rabbitPublisher.publishEmailCommand(
-                saved.getGuestEmail(), 
-                "Reserva Registrada", 
-                "Tu reserva #" + saved.getId() + " ha sido registrada con éxito.", 
-                correlationId
-        );
+        if (emailNotificationsEnabled) {
+            rabbitPublisher.publishEmailCommand(
+                    saved.getGuestEmail(),
+                    "Reserva Registrada",
+                    "Tu reserva #" + saved.getId() + " ha sido registrada con éxito.",
+                    correlationId
+            );
+        }
         kafkaPublisher.publishReservationEvent("RESERVATION_CREATED", saved, currentUser);
 
         return mapToResponse(saved);
@@ -91,12 +97,14 @@ public class ReservationService {
         String correlationId = "RES-" + updated.getId();
 
         if (nextStatus == ReservationStatus.CONFIRMADA) {
-            rabbitPublisher.publishEmailCommand(
-                    updated.getGuestEmail(), 
-                    "Reserva Confirmada", 
-                    "Tu reserva #" + updated.getId() + " ha sido confirmada.", 
-                    correlationId
-            );
+            if (emailNotificationsEnabled) {
+                rabbitPublisher.publishEmailCommand(
+                        updated.getGuestEmail(),
+                        "Reserva Confirmada",
+                        "Tu reserva #" + updated.getId() + " ha sido confirmada.",
+                        correlationId
+                );
+            }
             rabbitPublisher.publishHousekeepingTicket(
                     updated.getUnitId(), 
                     "Preparar habitación para reserva #" + updated.getId(), 
