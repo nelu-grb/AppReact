@@ -94,6 +94,8 @@ public class KpiService {
 
     private double averageCycleTimeMinutes(List<JsonNode> events) {
         return events.stream()
+                .filter(event -> "RESERVATION_STATUS_UPDATED".equals(event.path("eventType").asText()))
+                .filter(event -> "CONFIRMADA".equals(event.path("status").asText()))
                 .filter(event -> event.hasNonNull("createdAt") && event.hasNonNull("updatedAt"))
                 .mapToLong(event -> cycleMinutes(event.path("createdAt").asText(), event.path("updatedAt").asText()))
                 .filter(minutes -> minutes >= 0)

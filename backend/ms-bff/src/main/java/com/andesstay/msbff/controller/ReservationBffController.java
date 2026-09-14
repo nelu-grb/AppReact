@@ -27,9 +27,11 @@ public class ReservationBffController {
 
     @PostMapping
     public Mono<ReservationResponse> create(@Valid @RequestBody ReservationRequest request,
-                                             @AuthenticationPrincipal Jwt jwt) {
+                                             @AuthenticationPrincipal Jwt jwt,
+                                             @RequestHeader("Authorization") String authorization) {
         return reservationsWebClient.post()
                 .uri("/api/reservations")
+                .header("Authorization", authorization)
                 .header("X-Actor", jwt.getSubject())
                 .bodyValue(request)
                 .retrieve()
@@ -63,9 +65,11 @@ public class ReservationBffController {
     @PutMapping("/{id}/status")
     public Mono<ReservationResponse> updateStatus(@PathVariable Long id,
                                                    @Valid @RequestBody StatusUpdateRequest request,
-                                                   @AuthenticationPrincipal Jwt jwt) {
+                                                   @AuthenticationPrincipal Jwt jwt,
+                                                   @RequestHeader("Authorization") String authorization) {
         return reservationsWebClient.put()
                 .uri("/api/reservations/{id}/status", id)
+                .header("Authorization", authorization)
                 .header("X-Actor", jwt.getSubject())
                 .bodyValue(request)
                 .retrieve()
