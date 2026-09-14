@@ -27,8 +27,9 @@ public class ReservationController {
     @PostMapping
     public ResponseEntity<ReservationResponse> createReservation(
             @Valid @RequestBody ReservationRequest request,
-            @AuthenticationPrincipal Jwt jwt) {
-        String actor = jwt != null ? jwt.getSubject() : "ANONYMOUS";
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestHeader(value = "X-Actor", required = false) String actorHeader) {
+        String actor = actorHeader != null ? actorHeader : jwt != null ? jwt.getSubject() : "ANONYMOUS";
         ReservationResponse response = reservationService.createReservation(request, actor);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
@@ -42,8 +43,9 @@ public class ReservationController {
     public ResponseEntity<ReservationResponse> updateStatus(
             @PathVariable Long id,
             @Valid @RequestBody StatusUpdateRequest request,
-            @AuthenticationPrincipal Jwt jwt) {
-        String actor = jwt != null ? jwt.getSubject() : "ANONYMOUS";
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestHeader(value = "X-Actor", required = false) String actorHeader) {
+        String actor = actorHeader != null ? actorHeader : jwt != null ? jwt.getSubject() : "ANONYMOUS";
         ReservationResponse response = reservationService.updateStatus(id, request, actor);
         return ResponseEntity.ok(response);
     }
