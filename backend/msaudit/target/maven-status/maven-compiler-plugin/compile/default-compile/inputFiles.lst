@@ -1,0 +1,8 @@
+C:\Users\fifte\Documents\Code\cloudfullstack\AppReact\backend\msaudit\AuditApplication.java
+C:\Users\fifte\Documents\Code\cloudfullstack\AppReact\backend\msaudit\config\KafkaConsumerConfig.java
+C:\Users\fifte\Documents\Code\cloudfullstack\AppReact\backend\msaudit\controller\AuditController.java
+C:\Users\fifte\Documents\Code\cloudfullstack\AppReact\backend\msaudit\dto\AuditEventResponse.java
+C:\Users\fifte\Documents\Code\cloudfullstack\AppReact\backend\msaudit\listener\AuditKafkaListener.java
+C:\Users\fifte\Documents\Code\cloudfullstack\AppReact\backend\msaudit\model\AuditEvent.java
+C:\Users\fifte\Documents\Code\cloudfullstack\AppReact\backend\msaudit\repository\AuditEventRepository.java
+C:\Users\fifte\Documents\Code\cloudfullstack\AppReact\backend\msaudit\service\AuditService.java
