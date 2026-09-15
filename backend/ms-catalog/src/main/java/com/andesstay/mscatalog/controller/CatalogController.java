@@ -63,6 +63,15 @@ public class CatalogController {
     }
 
     private String actor(Jwt jwt) {
-        return jwt == null ? "ANONYMOUS" : jwt.getSubject();
+        if (jwt == null) return "ANONYMOUS";
+
+        String preferredUsername = jwt.getClaimAsString("preferred_username");
+        if (preferredUsername != null && !preferredUsername.isBlank()) return preferredUsername;
+
+        String uniqueName = jwt.getClaimAsString("unique_name");
+        if (uniqueName != null && !uniqueName.isBlank()) return uniqueName;
+
+        String name = jwt.getClaimAsString("name");
+        return name != null && !name.isBlank() ? name : jwt.getSubject();
     }
 }

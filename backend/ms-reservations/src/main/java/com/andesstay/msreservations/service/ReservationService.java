@@ -3,6 +3,7 @@ package com.andesstay.msreservations.service;
 import com.andesstay.msreservations.dto.ReservationRequest;
 import com.andesstay.msreservations.dto.ReservationResponse;
 import com.andesstay.msreservations.dto.StatusUpdateRequest;
+import com.andesstay.msreservations.dto.UnitDto;
 import com.andesstay.msreservations.messaging.KafkaPublisher;
 import com.andesstay.msreservations.messaging.RabbitMQPublisher;
 import com.andesstay.msreservations.model.Reservation;
@@ -15,7 +16,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -35,13 +38,25 @@ public class ReservationService {
     public ReservationResponse createReservation(ReservationRequest request, String currentUser) {
         unitValidationService.validateUnitAvailability(request.getUnitId(), request.getStartDate(), request.getEndDate());
 
+        UnitDto unit = unitValidationService.getUnit(request.getUnitId());
+        if (unit == null || unit.getPricePerNight() == null || unit.getPricePerNight().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("No se pudo obtener el precio por noche de la unidad");
+        }
+
+        long nights = ChronoUnit.DAYS.between(request.getStartDate(), request.getEndDate());
+        if (nights <= 0) {
+            throw new IllegalArgumentException("La fecha de salida debe ser posterior a la fecha de entrada");
+        }
+
+        BigDecimal totalAmount = unit.getPricePerNight().multiply(BigDecimal.valueOf(nights));
+
         Reservation reservation = Reservation.builder()
                 .unitId(request.getUnitId())
                 .guestId(request.getGuestId())
                 .guestEmail(request.getGuestEmail())
                 .startDate(request.getStartDate())
                 .endDate(request.getEndDate())
-                .totalAmount(request.getTotalAmount())
+                .totalAmount(totalAmount)
                 .status(ReservationStatus.CREADA)
                 .build();
 

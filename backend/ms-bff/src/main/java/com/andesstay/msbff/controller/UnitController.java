@@ -30,7 +30,7 @@ public class UnitController {
                                     @AuthenticationPrincipal Jwt jwt) {
         return catalogWebClient.post()
                 .uri("/api/catalog/units")
-                .header("X-Actor", jwt == null ? "ANONYMOUS" : jwt.getSubject())
+                .header("X-Actor", actorName(jwt))
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(UnitResponse.class);
@@ -65,7 +65,7 @@ public class UnitController {
                                     @AuthenticationPrincipal Jwt jwt) {
         return catalogWebClient.put()
                 .uri("/api/catalog/units/{id}", id)
-                .header("X-Actor", jwt == null ? "ANONYMOUS" : jwt.getSubject())
+                .header("X-Actor", actorName(jwt))
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(UnitResponse.class);
@@ -76,9 +76,22 @@ public class UnitController {
                             @AuthenticationPrincipal Jwt jwt) {
         return catalogWebClient.delete()
                 .uri("/api/catalog/units/{id}", id)
-                .header("X-Actor", jwt == null ? "ANONYMOUS" : jwt.getSubject())
+                .header("X-Actor", actorName(jwt))
                 .retrieve()
                 .bodyToMono(Void.class);
+    }
+
+    private String actorName(Jwt jwt) {
+        if (jwt == null) return "ANONYMOUS";
+
+        String preferredUsername = jwt.getClaimAsString("preferred_username");
+        if (preferredUsername != null && !preferredUsername.isBlank()) return preferredUsername;
+
+        String uniqueName = jwt.getClaimAsString("unique_name");
+        if (uniqueName != null && !uniqueName.isBlank()) return uniqueName;
+
+        String name = jwt.getClaimAsString("name");
+        return name != null && !name.isBlank() ? name : jwt.getSubject();
     }
 
     @GetMapping("/{id}/availability")

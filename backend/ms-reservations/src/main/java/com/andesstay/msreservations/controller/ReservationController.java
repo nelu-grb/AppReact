@@ -29,7 +29,7 @@ public class ReservationController {
             @Valid @RequestBody ReservationRequest request,
             @AuthenticationPrincipal Jwt jwt,
             @RequestHeader(value = "X-Actor", required = false) String actorHeader) {
-        String actor = actorHeader != null ? actorHeader : jwt != null ? jwt.getSubject() : "ANONYMOUS";
+        String actor = actorHeader != null && !actorHeader.isBlank() ? actorHeader : actor(jwt);
         ReservationResponse response = reservationService.createReservation(request, actor);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
@@ -45,9 +45,22 @@ public class ReservationController {
             @Valid @RequestBody StatusUpdateRequest request,
             @AuthenticationPrincipal Jwt jwt,
             @RequestHeader(value = "X-Actor", required = false) String actorHeader) {
-        String actor = actorHeader != null ? actorHeader : jwt != null ? jwt.getSubject() : "ANONYMOUS";
+        String actor = actorHeader != null && !actorHeader.isBlank() ? actorHeader : actor(jwt);
         ReservationResponse response = reservationService.updateStatus(id, request, actor);
         return ResponseEntity.ok(response);
+    }
+
+    private String actor(Jwt jwt) {
+        if (jwt == null) return "ANONYMOUS";
+
+        String preferredUsername = jwt.getClaimAsString("preferred_username");
+        if (preferredUsername != null && !preferredUsername.isBlank()) return preferredUsername;
+
+        String uniqueName = jwt.getClaimAsString("unique_name");
+        if (uniqueName != null && !uniqueName.isBlank()) return uniqueName;
+
+        String name = jwt.getClaimAsString("name");
+        return name != null && !name.isBlank() ? name : jwt.getSubject();
     }
 
     @GetMapping
