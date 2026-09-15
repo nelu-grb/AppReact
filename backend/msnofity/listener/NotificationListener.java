@@ -8,6 +8,7 @@ import com.react.backend.msnofity.service.NotificationService;
 import com.react.backend.msnofity.service.VoucherService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.amqp.core.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -35,7 +36,8 @@ public class NotificationListener {
     }
 
     @RabbitListener(queues = "${app.rabbitmq.queue.email}")
-    public void processEmail(JsonNode envelope) {
+    public void processEmail(Message message) throws Exception {
+        JsonNode envelope = objectMapper.readTree(message.getBody());
         log.info("Mensaje recibido de q.cmd.email: {}", envelope);
         JsonNode payload = envelope.path("payload");
         NotificationEvent event = new NotificationEvent(
@@ -53,7 +55,8 @@ public class NotificationListener {
     }
 
     @RabbitListener(queues = "${app.rabbitmq.queue.housekeeping}")
-    public void processHousekeeping(JsonNode envelope) {
+    public void processHousekeeping(Message message) throws Exception {
+        JsonNode envelope = objectMapper.readTree(message.getBody());
         JsonNode payload = envelope.path("payload");
         housekeepingService.createTicket(new HousekeepingTicketEvent(
                 envelope.path("correlationId").asText(),
@@ -63,7 +66,8 @@ public class NotificationListener {
     }
 
     @RabbitListener(queues = "${app.rabbitmq.queue.voucher}")
-    public void processVoucher(JsonNode envelope) {
+    public void processVoucher(Message message) throws Exception {
+        JsonNode envelope = objectMapper.readTree(message.getBody());
         JsonNode payload = envelope.path("payload");
         voucherService.generateVoucher(new VoucherEvent(
                 payload.path("reservationId").asText(), "", "", 0D));
