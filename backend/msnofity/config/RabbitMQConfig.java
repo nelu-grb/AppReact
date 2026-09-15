@@ -1,8 +1,8 @@
 package com.react.backend.msnofity.config;
 
 import org.springframework.amqp.core.*;
-import org.springframework.amqp.support.DefaultJackson2JavaTypeMapper;
-import org.springframework.amqp.support.Jackson2JavaTypeMapper;
+import org.springframework.amqp.support.converter.DefaultJackson2JavaTypeMapper;
+import org.springframework.amqp.support.converter.Jackson2JavaTypeMapper;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.beans.factory.annotation.Value;
