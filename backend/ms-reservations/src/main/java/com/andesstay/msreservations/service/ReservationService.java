@@ -142,7 +142,12 @@ public class ReservationService {
                     "Preparar habitación para reserva #" + updated.getId(), 
                     correlationId
             );
-            rabbitPublisher.publishVoucherGenCommand(updated.getId(), correlationId);
+            rabbitPublisher.publishVoucherGenCommand(
+                    updated.getId(),
+                    updated.getGuestEmail(),
+                    updated.getTotalAmount(),
+                    correlationId
+            );
         }
 
         kafkaPublisher.publishReservationEvent("RESERVATION_STATUS_UPDATED", updated, currentUser);

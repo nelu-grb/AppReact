@@ -70,6 +70,10 @@ public class NotificationListener {
         JsonNode envelope = objectMapper.readTree(message.getBody());
         JsonNode payload = envelope.path("payload");
         voucherService.generateVoucher(new VoucherEvent(
-                payload.path("reservationId").asText(), "", "", 0D));
+                payload.path("reservationId").asText(),
+                payload.path("customerEmail").asText(),
+                payload.path("voucherCode").asText(),
+                payload.path("amount").asDouble(0D)
+        ));
     }
 }
