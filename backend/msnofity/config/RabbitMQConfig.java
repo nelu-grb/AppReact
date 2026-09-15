@@ -6,6 +6,7 @@ import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.amqp.support.converter.Jackson2JavaTypeMapper;
 
 @Configuration
 public class RabbitMQConfig {
@@ -138,7 +139,8 @@ public class RabbitMQConfig {
     @Bean
     public MessageConverter jsonMessageConverter() {
         Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter();
-        converter.setTypePrecedence(Jackson2JsonMessageConverter.TypePrecedence.INFERRED);
+        // Cambiar de Jackson2JsonMessageConverter a Jackson2JavaTypeMapper
+        converter.setTypePrecedence(Jackson2JavaTypeMapper.TypePrecedence.INFERRED);
         return converter;
     }
 }
