@@ -126,7 +126,7 @@ public class RabbitMQConfig {
     @Bean
     public MessageConverter jsonMessageConverter() {
         Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter();
-        Jackson2JavaTypeMapper typeMapper = new DefaultJackson2JavaTypeMapper();
+        DefaultJackson2JavaTypeMapper typeMapper = new DefaultJackson2JavaTypeMapper();
         typeMapper.setTypePrecedence(Jackson2JavaTypeMapper.TypePrecedence.INFERRED);
         converter.setJavaTypeMapper(typeMapper);
         return converter;
