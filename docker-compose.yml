@@ -1,0 +1,141 @@
+services:
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: andesstay-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: andesstay_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d andesstay_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ms-catalog:
+    build:
+      context: ./backend/ms-catalog
+      dockerfile: Dockerfile
+    container_name: ms-catalog
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/andesstay_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_HOST}
+      SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST}
+      SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT}
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+
+  ms-reservations:
+    build:
+      context: ./backend/ms-reservations
+      dockerfile: Dockerfile
+    container_name: ms-reservations
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/andesstay_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_HOST}
+      SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST}
+      SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT}
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+      NOTIFICATIONS_EMAIL_ENABLED: "false"
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+
+  ms-bff:
+    build:
+      context: ./backend/ms-bff
+      dockerfile: Dockerfile
+    container_name: ms-bff
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/andesstay_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      ms-catalog:
+        condition: service_started
+      ms-reservations:
+        condition: service_started
+
+  msaudit:
+    build:
+      context: ./backend/msaudit
+    container_name: msaudit
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    environment:
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx256m
+      DB_HOST: postgres-db
+      DB_PORT: 5432
+      DB_NAME: andesstay_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      KAFKA_HOST: kafka:29092
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+
+  msnofity:
+    build:
+      context: ./backend/msnofity
+    container_name: msnofity
+    restart: unless-stopped
+    ports:
+      - "8084:8084"
+    environment:
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx256m
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-onboarding@resend.dev}
+    depends_on:
+      ms-reservations:
+        condition: service_started
+
+  msreport:
+    build:
+      context: ./backend/msreport
+    container_name: msreport
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    environment:
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx256m
+      DB_HOST: postgres-db
+      DB_PORT: 5432
+      DB_NAME: andesstay_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      KAFKA_HOST: kafka:29092
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

@@ -1,0 +1,8 @@
+com\react\backend\msaudit\AuditApplication.class
+com\react\backend\msaudit\model\AuditEvent.class
+com\react\backend\msaudit\repository\AuditEventRepository.class
+com\react\backend\msaudit\config\KafkaConsumerConfig.class
+com\react\backend\msaudit\controller\AuditController.class
+com\react\backend\msaudit\service\AuditService.class
+com\react\backend\msaudit\listener\AuditKafkaListener.class
+com\react\backend\msaudit\dto\AuditEventResponse.class
