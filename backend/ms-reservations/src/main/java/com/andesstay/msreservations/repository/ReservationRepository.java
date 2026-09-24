@@ -16,7 +16,8 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     @Query("SELECT r FROM Reservation r WHERE " +
            "(:status IS NULL OR r.status = :status) AND " +
            "(:fromDate IS NULL OR r.startDate >= :fromDate) AND " +
-           "(:toDate IS NULL OR r.endDate <= :toDate)")
+            "(:toDate IS NULL OR r.endDate <= :toDate) " +
+            "ORDER BY r.createdAt DESC, r.id DESC")
     List<Reservation> findByFilters(
             @Param("status") ReservationStatus status,
             @Param("fromDate") LocalDate fromDate,

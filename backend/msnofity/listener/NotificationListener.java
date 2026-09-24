@@ -8,6 +8,7 @@ import com.react.backend.msnofity.service.NotificationService;
 import com.react.backend.msnofity.service.VoucherService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.amqp.core.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -35,7 +36,8 @@ public class NotificationListener {
     }
 
     @RabbitListener(queues = "${app.rabbitmq.queue.email}")
-    public void processEmail(JsonNode envelope) {
+    public void processEmail(Message message) throws Exception {
+        JsonNode envelope = objectMapper.readTree(message.getBody());
         log.info("Mensaje recibido de q.cmd.email: {}", envelope);
         JsonNode payload = envelope.path("payload");
         NotificationEvent event = new NotificationEvent(
@@ -53,31 +55,25 @@ public class NotificationListener {
     }
 
     @RabbitListener(queues = "${app.rabbitmq.queue.housekeeping}")
-    public void processHousekeeping(JsonNode envelope) {
-        log.info("Mensaje recibido de q.cmd.housekeeping: {}", envelope);
-
+    public void processHousekeeping(Message message) throws Exception {
+        JsonNode envelope = objectMapper.readTree(message.getBody());
         JsonNode payload = envelope.path("payload");
-
-        String reservationId = envelope.path("correlationId").asText(null);
-        String unitId = payload.path("unitId").asText(null);
-        String detail = payload.path("detail").asText(null);
-
-        if (reservationId == null || unitId == null || detail == null) {
-            log.error("Mensaje de housekeeping malformado, faltan campos obligatorios: {}", envelope);
-            throw new IllegalArgumentException("Payload de housekeeping inválido: correlationId/unitId/detail requeridos");
-        }
-
         housekeepingService.createTicket(new HousekeepingTicketEvent(
-                reservationId,
-                unitId,
-                detail,
+                envelope.path("correlationId").asText(),
+                payload.path("unitId").asText(),
+                payload.path("detail").asText(),
                 "NORMAL"));
     }
 
     @RabbitListener(queues = "${app.rabbitmq.queue.voucher}")
-    public void processVoucher(JsonNode envelope) {
+    public void processVoucher(Message message) throws Exception {
+        JsonNode envelope = objectMapper.readTree(message.getBody());
         JsonNode payload = envelope.path("payload");
         voucherService.generateVoucher(new VoucherEvent(
-                payload.path("reservationId").asText(), "", "", 0D));
+                payload.path("reservationId").asText(),
+                payload.path("customerEmail").asText(),
+                payload.path("voucherCode").asText(),
+                payload.path("amount").asDouble(0D)
+        ));
     }
 }

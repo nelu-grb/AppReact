@@ -47,7 +47,7 @@ public class UnitValidationService {
         log.info("Unit {} is available for reservation from {} to {}", unitId, startDate, endDate);
     }
 
-    private UnitDto getUnit(Long unitId) {
+    public UnitDto getUnit(Long unitId) {
         try {
             return catalogWebClient.get()
                     .uri("/api/catalog/units/{id}", unitId)

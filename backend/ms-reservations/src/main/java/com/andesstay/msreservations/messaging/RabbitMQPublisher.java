@@ -37,12 +37,17 @@ public class RabbitMQPublisher {
         rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_DIRECT, "housekeeping.ticket", envelope);
     }
 
-    public void publishVoucherGenCommand(Long reservationId, String correlationId) {
+    public void publishVoucherGenCommand(Long reservationId, String guestEmail, java.math.BigDecimal totalAmount, String correlationId) {
         MessageEnvelope<Map<String, Object>> envelope = MessageEnvelope.<Map<String, Object>>builder()
                 .type("VOUCHER_GEN")
                 .traceId(UUID.randomUUID().toString())
                 .correlationId(correlationId)
-                .payload(Map.of("reservationId", reservationId))
+                .payload(Map.of(
+                        "reservationId", reservationId,
+                        "customerEmail", guestEmail,
+                        "voucherCode", "VOUCHER-" + reservationId,
+                        "amount", totalAmount
+                ))
                 .build();
 
         rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_DIRECT, "voucher.gen", envelope);

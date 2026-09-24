@@ -25,7 +25,6 @@ public class ReservationRequest {
     @NotNull(message = "La fecha de fin es obligatoria")
     private LocalDate endDate;
 
-    @NotNull(message = "El monto total es obligatorio")
     @Positive(message = "El monto total debe ser mayor a cero")
     private BigDecimal totalAmount;
 } 

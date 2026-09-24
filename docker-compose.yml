@@ -56,12 +56,9 @@ services:
       SPRING_RABBITMQ_USERNAME: guest
       SPRING_RABBITMQ_PASSWORD: guest
       NOTIFICATIONS_EMAIL_ENABLED: "false"
-      DOWNSTREAM_CATALOG_BASE_URL: http://ms-catalog:8082
     depends_on:
       postgres-db:
         condition: service_healthy
-      ms-catalog:
-        condition: service_started
 
   ms-bff:
     build:

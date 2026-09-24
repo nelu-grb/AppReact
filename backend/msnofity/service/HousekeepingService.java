@@ -10,10 +10,8 @@ public class HousekeepingService {
 
     private static final Logger log = LoggerFactory.getLogger(HousekeepingService.class);
 
-    // TODO: reemplazar por persistencia real (BD) o llamada a otro microservicio
-    // cuando definas dónde vive el ticket de housekeeping.
     public void createTicket(HousekeepingTicketEvent event) {
-        log.info("Creando TICKET -> Reserva: {} | Habitación: {} | Tarea: {}",
+        log.info("Creando TICKET -> Reserva: {} | Habitación: {} | Tarea: {}", 
                 event.reservationId(), event.roomId(), event.taskType());
     }
 }
