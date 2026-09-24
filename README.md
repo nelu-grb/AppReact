@@ -60,7 +60,25 @@ Las transiciones a `CHECKIN_PENDIENTE` o `EN_ESTADIA` requieren que la reserva h
 
 ## Kafka
 
-Kafka se utiliza para eventos de dominio que pueden ser consumidos por varios servicios de forma independiente. Los productores serializan el valor como JSON y usan el identificador de la entidad como clave.
+Kafka es la plataforma de **event streaming** del proyecto. Se utiliza para publicar hechos que ya ocurrieron en el dominio, como una reserva creada, una reserva confirmada o una unidad actualizada. El productor no llama directamente al servicio consumidor: publica el evento en un topic y cada grupo de consumidores decide qué copia lógica recibe y cómo la procesa.
+
+Esto lo diferencia de RabbitMQ:
+
+| Tecnología | Uso en AndesStay | Ejemplo |
+| --- | --- | --- |
+| Kafka | Eventos de dominio, auditoría y reportes. Un mismo evento puede ser leído por varios grupos. | Una reserva se publica para `msreport` y, separadamente, para `msaudit`. |
+| RabbitMQ | Comandos dirigidos a una acción concreta. | `ms-reservations` ordena enviar un email a `msnofity`. |
+
+### Conceptos que se utilizan
+
+- **Producer**: microservicio que publica eventos. Son `ms-reservations` y `ms-catalog`.
+- **Topic**: canal lógico donde se almacenan los eventos. El proyecto usa `reservations.events`, `audit.timeline` y `catalog.events`.
+- **Partition**: división de un topic que permite escalar el procesamiento. El código no fija particiones; Kafka administra la configuración del broker.
+- **Key**: identificador usado al publicar. El proyecto usa `reservationId` o `unitId` como clave, para mantener relacionados los eventos de una misma entidad dentro de la partición correspondiente.
+- **Consumer**: microservicio que lee eventos. Son `msreport` y `msaudit`.
+- **Consumer group**: grupo que coordina consumidores y mantiene sus offsets. `report-group` y `audit-group` son independientes, por lo que ambos pueden recibir eventos sin competir entre sí.
+- **Offset**: posición de lectura de un grupo dentro de cada partición. `auto-offset-reset=earliest` permite comenzar desde los eventos disponibles más antiguos cuando el grupo todavía no tiene offset.
+- **Serialización JSON**: los productores envían el valor como JSON y los consumidores lo reciben como texto para luego interpretarlo.
 
 ### Topics
 
@@ -70,14 +88,110 @@ Kafka se utiliza para eventos de dominio que pueden ser consumidos por varios se
 | `audit.timeline` | `ms-reservations`, `ms-catalog` | `msaudit` (`audit-group`) | Auditoría de reservas y unidades. |
 | `catalog.events` | `ms-catalog` | No se observa un consumidor en el código actual | Eventos `UNIT_CREATED`, `UNIT_UPDATED` y `UNIT_DELETED`. |
 
-Un evento de reserva contiene, entre otros campos, `eventType`, `reservationId`, `unitId`, `guestId`, `status`, fechas, `actor` y `timestamp`. Un evento de catálogo contiene `eventType`, `unitId`, nombre, tipo, ciudad, disponibilidad, actor y timestamp.
+La topología funcional es:
+
+```mermaid
+flowchart LR
+        RES[ms-reservations] -->|RESERVATION_CREATED / RESERVATION_STATUS_UPDATED| RE[reservations.events]
+        RE -->|report-group| REPORT[msreport]
+        RES -->|mismo evento de reserva| AUDT[audit.timeline]
+        CAT[ms-catalog] -->|UNIT_CREATED / UPDATED / DELETED| CE[catalog.events]
+        CAT -->|mismo evento de catálogo| AUDT
+        AUDT -->|audit-group| AUD[msaudit]
+```
+
+Kafka no enruta por routing key como RabbitMQ: el productor elige el topic y Kafka conserva el evento para que cada grupo lo lea según sus offsets.
+
+### Eventos publicados por `ms-reservations`
+
+El método `publishReservationEvent(...)` construye un `Map<String, Object>` y lo envía dos veces, a dos topics diferentes, usando el ID de la reserva como clave:
+
+| Evento | Topic | Consumidor | Cuándo se publica |
+| --- | --- | --- | --- |
+| `RESERVATION_CREATED` | `reservations.events` | `msreport` | Después de crear y guardar una reserva. |
+| `RESERVATION_CREATED` | `audit.timeline` | `msaudit` | El mismo momento, para auditoría. |
+| `RESERVATION_STATUS_UPDATED` | `reservations.events` | `msreport` | Después de cambiar el estado de una reserva. |
+| `RESERVATION_STATUS_UPDATED` | `audit.timeline` | `msaudit` | El mismo momento, para conservar la trazabilidad. |
+
+El payload de una reserva contiene:
+
+```json
+{
+    "eventType": "RESERVATION_STATUS_UPDATED",
+    "reservationId": 123,
+    "unitId": 45,
+    "guestId": 9,
+    "status": "CONFIRMADA",
+    "startDate": "2026-09-25",
+    "endDate": "2026-09-28",
+    "createdAt": "2026-09-23T10:00:00",
+    "updatedAt": "2026-09-23T10:05:00",
+    "actor": "usuario@ejemplo.com",
+    "timestamp": 1710000000000
+}
+```
+
+El método `publishReservationEvent(...)` está en [KafkaPublisher.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/messaging/KafkaPublisher.java). Se invoca desde `createReservation(...)` y `updateStatus(...)` en [ReservationService.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/service/ReservationService.java).
+
+### Eventos publicados por `ms-catalog`
+
+El método `publishUnitEvent(...)` publica los cambios de una unidad en `catalog.events` y también en `audit.timeline`:
+
+| Evento | Topic | Consumidor actual | Cuándo se publica |
+| --- | --- | --- | --- |
+| `UNIT_CREATED` | `catalog.events` y `audit.timeline` | `catalog.events` no tiene consumidor; `audit.timeline` lo consume `msaudit` | Después de crear una unidad. |
+| `UNIT_UPDATED` | `catalog.events` y `audit.timeline` | Igual que el anterior | Después de actualizar una unidad. |
+| `UNIT_DELETED` | `catalog.events` y `audit.timeline` | Igual que el anterior | Después de eliminar una unidad. |
+
+El payload de catálogo contiene `eventType`, `unitId`, `name`, `type`, `city`, `availability`, `actor` y `timestamp`. El productor está en [KafkaPublisher.java](backend/ms-catalog/src/main/java/com/andesstay/mscatalog/messaging/KafkaPublisher.java), y se invoca desde `create(...)`, `update(...)` y `delete(...)` en [CatalogService.java](backend/ms-catalog/src/main/java/com/andesstay/mscatalog/service/CatalogService.java).
 
 ### Cómo funciona el consumo
 
-- `msaudit` escucha `audit.timeline` con el grupo `audit-group`, interpreta el JSON y guarda el payload completo.
-- `msreport` escucha `reservations.events` con el grupo `report-group` y guarda cada evento para calcular sus indicadores.
-- Los grupos de consumidores permiten que auditoría y reportes reciban sus propias copias lógicas de los eventos.
-- El broker local se ejecuta como un nodo Kafka combinado broker/controller, con replicación 1 y retención configurada de 24 horas o 1 GB.
+- `msaudit` escucha `audit.timeline` con el grupo `audit-group` mediante `consume(...)` en [AuditKafkaListener.java](backend/msaudit/listener/AuditKafkaListener.java). Convierte el texto JSON con `ObjectMapper`, identifica `eventType`, obtiene `reservationId` o `unitId` como agregado y delega en `saveEvent(...)` de [AuditService.java](backend/msaudit/service/AuditService.java), que persiste el evento en PostgreSQL.
+- `msreport` escucha `reservations.events` con el grupo `report-group` mediante `consumeReservationEvent(...)` en [ReportEventListener.java](backend/msreport/listener/ReportEventListener.java). Guarda el JSON recibido como un `Report` en PostgreSQL.
+- Los KPIs no se calculan directamente dentro del listener. [KpiService.java](backend/msreport/service/KpiService.java) lee los reportes guardados, filtra eventos de tipo `RESERVATION_EVENT` y calcula reservas por hora, ocupación activa y tiempo promedio del ciclo de reserva.
+- `msaudit` define su `ConsumerFactory` y `kafkaListenerContainerFactory` en [KafkaConsumerConfig.java](backend/msaudit/config/KafkaConsumerConfig.java), con deserialización de clave y valor como `String`.
+- Los grupos `audit-group` y `report-group` son distintos. Por eso `msaudit` y `msreport` reciben sus propios eventos: no se reparten el trabajo entre sí.
+
+### Flujo Kafka de una reserva
+
+| Paso | Qué ocurre | Método y archivo |
+| --- | --- | --- |
+| 1. Crear reserva | Se guarda la reserva en PostgreSQL y se construye el evento `RESERVATION_CREATED`. | `createReservation(...)` en [ReservationService.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/service/ReservationService.java) |
+| 2. Publicar evento | Se envía el mismo evento a `reservations.events` y `audit.timeline` con `reservationId` como clave. | `publishReservationEvent(...)` en [KafkaPublisher.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/messaging/KafkaPublisher.java) |
+| 3. Generar reporte | `msreport` recibe el evento con `report-group` y lo persiste como reporte. | `consumeReservationEvent(...)` en [ReportEventListener.java](backend/msreport/listener/ReportEventListener.java) |
+| 4. Auditar | `msaudit` recibe la copia de `audit.timeline`, extrae el agregado y guarda el payload original. | `consume(...)` en [AuditKafkaListener.java](backend/msaudit/listener/AuditKafkaListener.java) y `saveEvent(...)` en [AuditService.java](backend/msaudit/service/AuditService.java) |
+| 5. Cambiar estado | Al confirmar, cancelar o cambiar el estado, se crea `RESERVATION_STATUS_UPDATED` y se repite la publicación en ambos topics. | `updateStatus(...)` en [ReservationService.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/service/ReservationService.java) |
+| 6. Calcular KPIs | Las consultas de reportes leen los eventos persistidos y calculan indicadores sobre el historial disponible. | `getKpis(...)`, `reservationsByHour(...)`, `activeOccupancy(...)` y `averageCycleTimeMinutes(...)` en [KpiService.java](backend/msreport/service/KpiService.java) |
+
+### Configuración y ejecución
+
+Los productores de `ms-reservations` y `ms-catalog` usan `KafkaTemplate<String, Object>` con JSON como serializador de valor. Sus propiedades principales son:
+
+```properties
+spring.kafka.bootstrap-servers=localhost:9092
+spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.StringSerializer
+spring.kafka.producer.value-serializer=org.springframework.kafka.support.serializer.JsonSerializer
+```
+
+Los consumidores de `msaudit` y `msreport` reciben el broker desde `KAFKA_HOST` y usan `localhost:9092` como valor local predeterminado:
+
+```properties
+spring.kafka.bootstrap-servers=${KAFKA_HOST:localhost:9092}
+spring.kafka.consumer.auto-offset-reset=earliest
+```
+
+Los productores usan estas propiedades en [application.properties](backend/ms-reservations/src/main/resources/application.properties) y [application.properties](backend/ms-catalog/src/main/resources/application.properties). Los consumidores las usan en [application.properties](backend/msaudit/src/main/resources/application.properties) y [application.properties](backend/msreport/src/main/resources/application.properties).
+
+En Docker, el broker se anuncia internamente como `kafka:29092` y externamente como `KAFKA_ADVERTISED_HOST:9092`. La definición se encuentra en [docker-compose.messaging.yml](docker-compose.messaging.yml). El contenedor utiliza un único nodo con rol `broker,controller`, replicación 1 y retención configurada de 24 horas o 1 GB. Estas opciones son adecuadas para desarrollo, pero no proporcionan alta disponibilidad de producción.
+
+Para iniciar Kafka:
+
+```powershell
+docker compose -f docker-compose.messaging.yml up -d kafka
+```
+
+Para confirmar que los consumidores y productores estén conectados, revisar los logs de `msaudit`, `msreport`, `ms-reservations` y `ms-catalog`, además de la configuración de `KAFKA_HOST` en Docker.
 
 ## RabbitMQ
 
