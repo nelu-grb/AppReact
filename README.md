@@ -435,6 +435,47 @@ docker compose -f docker-compose.messaging.yml down
 
 Para conservar o eliminar los datos de PostgreSQL, recordar que `postgres_data` es un volumen de Docker. `docker compose down -v` lo elimina.
 
+## Wizard de despliegue del backend
+
+El wizard de línea de comandos está en [`scripts/deploy-backend.ps1`](scripts/deploy-backend.ps1). Permite seleccionar:
+
+- `Local`: valida Docker Compose y puede levantar mensajería y todos los microservicios.
+- `AWS`: valida AWS CLI, Docker y la identidad activa antes de preparar el despliegue hacia ECR/ECS.
+- `Azure`: valida Azure CLI, Docker y la suscripción activa antes de preparar el despliegue hacia ACR/Container Apps.
+
+Para abrir el wizard en Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy-backend.ps1
+```
+
+Para ejecutar directamente el despliegue local:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy-backend.ps1 -Target Local -Execute
+```
+
+AWS y Azure requieren definir previamente la red, secretos, registro de imágenes, permisos y sizing del entorno. Por eso el wizard valida las herramientas y muestra el siguiente paso sin ejecutar comandos cloud irreversibles automáticamente. Las credenciales deben permanecer en el entorno local o en el proveedor cloud, nunca en el frontend ni en el repositorio.
+
+### Contrato para el frontend externo
+
+El `ms-bff` expone los endpoints autenticados:
+
+- `GET /api/deployments/options`: destinos disponibles y si requieren credenciales cloud.
+- `POST /api/deployments/plan`: genera un plan y los comandos del wizard.
+
+Ejemplo de solicitud:
+
+```json
+{
+  "target": "AWS",
+  "projectName": "andesstay",
+  "awsRegion": "us-east-1"
+}
+```
+
+Para Azure, usar `azureResourceGroup` y `azureLocation`. El BFF no ejecuta comandos del sistema ni recibe credenciales; el frontend debe mostrar el plan y dirigir al operador al wizard CLI.
+
 ## Ejecución local de un servicio
 
 Primero levantar las dependencias de mensajería y PostgreSQL:
