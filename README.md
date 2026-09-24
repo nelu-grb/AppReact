@@ -455,6 +455,24 @@ Al seleccionar `1. Local`, el wizard ejecuta automáticamente los dos comandos d
 powershell -ExecutionPolicy Bypass -File .\scripts\deploy-backend.ps1 -WhatIf
 ```
 
+Para apagar automáticamente el backend local y la infraestructura de mensajería:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy-backend.ps1 -Target Local -Action Stop
+```
+
+Para revisar el apagado sin ejecutarlo:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy-backend.ps1 -Target Local -Action Stop -WhatIf
+```
+
+El apagado conserva el volumen de PostgreSQL. Para volver a iniciar el backend:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy-backend.ps1 -Target Local -Action Start
+```
+
 AWS y Azure requieren definir previamente la red, secretos, registro de imágenes, permisos y sizing del entorno. Por eso el wizard valida las herramientas y muestra el siguiente paso sin ejecutar comandos cloud irreversibles automáticamente. Las credenciales deben permanecer en el entorno local o en el proveedor cloud, nunca en el frontend ni en el repositorio.
 
 ### Contrato para el frontend externo

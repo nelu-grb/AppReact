@@ -2,6 +2,8 @@
 param(
     [ValidateSet("Local", "Aws", "Azure")]
     [string]$Target,
+    [ValidateSet("Start", "Stop")]
+    [string]$Action = "Start",
     [ValidatePattern("^[a-zA-Z0-9][a-zA-Z0-9-]{1,30}$")]
     [string]$ProjectName = "andesstay",
     [string]$AwsRegion = "us-east-1",
@@ -29,6 +31,17 @@ function Read-Choice {
 }
 
 if (-not $Target) { $Target = Read-Choice }
+if ($Target -eq "Local" -and -not $WhatIf -and $Action -eq "Start" -and $PSBoundParameters.Count -eq 0) {
+    Write-Host "`nSeleccione la operacion local:"
+    Write-Host "  1. Iniciar backend"
+    Write-Host "  2. Apagar backend"
+    $operation = Read-Host "Opcion"
+    switch ($operation) {
+        "1" { $Action = "Start" }
+        "2" { $Action = "Stop" }
+        default { throw "Operacion invalida. Use 1 o 2." }
+    }
+}
 if ($Target -eq "Azure" -and [string]::IsNullOrWhiteSpace($AzureResourceGroup)) {
     $AzureResourceGroup = "$ProjectName-rg"
 }
@@ -42,6 +55,30 @@ function Assert-Command($command) {
 switch ($Target) {
     "Local" {
         Assert-Command "docker"
+        if ($Action -eq "Stop") {
+            $stopCommands = @(
+                "docker compose down",
+                "docker compose -f docker-compose.messaging.yml down"
+            )
+            Write-Host "`nComandos de apagado:"
+            $stopCommands | ForEach-Object { Write-Host "  $_" }
+            if ($WhatIf) {
+                Write-Host "`nModo WhatIf: no se ejecutaron comandos."
+                break
+            }
+            Write-Host "`nApagando microservicios..."
+            docker compose down
+            if ($LASTEXITCODE -ne 0) {
+                throw "No se pudieron detener los microservicios."
+            }
+            Write-Host "Apagando mensajeria..."
+            docker compose -f docker-compose.messaging.yml down
+            if ($LASTEXITCODE -ne 0) {
+                throw "No se pudo detener la infraestructura de mensajeria."
+            }
+            Write-Host "`nBackend local apagado. Los volumenes no fueron eliminados."
+            break
+        }
         $commands = @(
             "docker compose -f docker-compose.messaging.yml up -d",
             "docker compose up -d --build"
