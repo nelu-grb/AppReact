@@ -119,14 +119,40 @@ Aunque `ms-catalog` incluye `spring-boot-starter-amqp` y configuración de conex
 
 ### Flujo de una reserva
 
-1. El cliente solicita una operación a través de `ms-bff`.
-2. `ms-reservations` valida y guarda la reserva en PostgreSQL.
-3. Al crear una reserva, publica un comando `EMAIL_SEND` solo cuando `notifications.email.enabled=true`. El valor predeterminado es `false`.
-4. Al cambiar el estado a `CONFIRMADA`, publica un comando `HOUSEKEEPING_TICKET` y otro `VOUCHER_GEN`. También publica el email de confirmación si las notificaciones están habilitadas.
-5. `RabbitTemplate.convertAndSend()` envía cada envoltorio al exchange `cmd.direct` con su routing key.
-6. RabbitMQ encuentra el binding correspondiente y encola el mensaje.
-7. `msnofity` recibe el mensaje con `@RabbitListener`, lee el JSON y ejecuta el servicio asociado.
-8. Si el procesamiento falla y el mensaje es rechazado, `default-requeue-rejected=false` evita el reintento automático; el mensaje puede ser enviado a la DLQ configurada.
+La siguiente trazabilidad muestra qué método participa en cada etapa y dónde se encuentra. Las rutas públicas pasan primero por el BFF; la lógica de negocio vive en `ms-reservations`; RabbitMQ se utiliza únicamente en los pasos marcados como comandos.
+
+| Paso | Qué ocurre | Método y archivo |
+| --- | --- | --- |
+| 1. Entrada HTTP | El cliente crea una reserva mediante `POST /reservations`. El BFF valida el request y reenvía la petición a `POST /api/reservations`, incluyendo el actor en `X-Actor`. | `create(...)` en [ReservationBffController.java](backend/ms-bff/src/main/java/com/andesstay/msbff/controller/ReservationBffController.java) |
+| 2. Controlador de reservas | El microservicio recibe la petición, obtiene el actor y delega la operación al servicio de reservas. | `createReservation(...)` en [ReservationController.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/controller/ReservationController.java) |
+| 3. Validación de unidad | Se comprueba que la unidad exista y que esté disponible para las fechas solicitadas. | `createReservation(...)` en [ReservationService.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/service/ReservationService.java), que llama a `validateUnitAvailability(...)`, `getUnit(...)` y `checkAvailability(...)` en [UnitValidationService.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/service/UnitValidationService.java) |
+| 4. Persistencia | Se calcula el total, se crea la entidad con estado `CREADA` y se guarda en PostgreSQL. | `createReservation(...)` y `reservationRepository.save(saved)` en [ReservationService.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/service/ReservationService.java) |
+| 5. Email de registro opcional | Si `notifications.email.enabled=true`, se construye un comando `EMAIL_SEND`. Por defecto esta opción está desactivada. | `publishEmailCommand(...)` en [RabbitMQPublisher.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/messaging/RabbitMQPublisher.java), llamado desde `createReservation(...)` en [ReservationService.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/service/ReservationService.java) |
+| 6. Evento de reserva | Después de guardar la reserva se publican los eventos `RESERVATION_CREATED` en Kafka para reportes y auditoría. | `publishReservationEvent(...)` en [KafkaPublisher.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/messaging/KafkaPublisher.java) |
+| 7. Actualización de estado | Para confirmar la reserva, el cliente usa `PUT /reservations/{id}/status`; el BFF lo reenvía a `PUT /api/reservations/{id}/status`. | `updateStatus(...)` en [ReservationBffController.java](backend/ms-bff/src/main/java/com/andesstay/msbff/controller/ReservationBffController.java) y `updateStatus(...)` en [ReservationController.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/controller/ReservationController.java) |
+| 8. Confirmación | Se valida la transición, se actualiza la entidad y se guarda el nuevo estado. Solo cuando `nextStatus == CONFIRMADA` se generan los comandos RabbitMQ. | `updateStatus(...)` y `reservationRepository.save(updated)` en [ReservationService.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/service/ReservationService.java) |
+| 9. Comando de email | Si las notificaciones están habilitadas, se publica `EMAIL_SEND` con `email`, `subject` y `body`. | `publishEmailCommand(...)` en [RabbitMQPublisher.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/messaging/RabbitMQPublisher.java) |
+| 10. Comando de housekeeping | Se publica `HOUSEKEEPING_TICKET` con `unitId` y `detail`, usando la routing key `housekeeping.ticket`. | `publishHousekeepingTicket(...)` en [RabbitMQPublisher.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/messaging/RabbitMQPublisher.java) |
+| 11. Comando de voucher | Se publica `VOUCHER_GEN` con `reservationId`, `customerEmail`, `voucherCode` y `amount`, usando `voucher.gen`. | `publishVoucherGenCommand(...)` en [RabbitMQPublisher.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/messaging/RabbitMQPublisher.java) |
+| 12. Enrutamiento RabbitMQ | `RabbitTemplate.convertAndSend()` envía el envoltorio JSON a `cmd.direct`; los bindings relacionan cada routing key con su cola. | `convertAndSend(...)` en [RabbitMQPublisher.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/messaging/RabbitMQPublisher.java) y bindings en [RabbitMQConfig.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/config/RabbitMQConfig.java) |
+| 13. Consumo de email | `msnofity` escucha `q.cmd.email`, extrae `payload` y llama a Resend para enviar el correo. | `processEmail(...)` en [NotificationListener.java](backend/msnofity/listener/NotificationListener.java), que llama a `sendEmail(...)` en [NotificationService.java](backend/msnofity/service/NotificationService.java) |
+| 14. Consumo de housekeeping | `msnofity` escucha `q.cmd.housekeeping`, transforma el payload y registra el ticket. | `processHousekeeping(...)` en [NotificationListener.java](backend/msnofity/listener/NotificationListener.java), que llama a `createTicket(...)` en [HousekeepingService.java](backend/msnofity/service/HousekeepingService.java) |
+| 15. Consumo de voucher | `msnofity` escucha `q.cmd.voucher`, transforma el payload y registra la generación del voucher. | `processVoucher(...)` en [NotificationListener.java](backend/msnofity/listener/NotificationListener.java), que llama a `generateVoucher(...)` en [VoucherService.java](backend/msnofity/service/VoucherService.java) |
+| 16. Error de consumo | Si el consumidor rechaza el mensaje, `default-requeue-rejected=false` evita el reintento automático y la configuración de la cola permite enviarlo al dead-letter exchange. | Propiedad en [application.properties](backend/msnofity/src/main/resources/application.properties) y argumentos de cola en [RabbitMQConfig.java](backend/msnofity/config/RabbitMQConfig.java) |
+
+#### Resumen por escenario
+
+**Crear una reserva (`POST /reservations`)**
+
+`ReservationBffController.create(...)` -> `ReservationController.createReservation(...)` -> `ReservationService.createReservation(...)` -> `UnitValidationService.validateUnitAvailability(...)` -> `reservationRepository.save(...)` -> opcionalmente `RabbitMQPublisher.publishEmailCommand(...)` -> `KafkaPublisher.publishReservationEvent(...)`.
+
+**Confirmar una reserva (`PUT /reservations/{id}/status` con `CONFIRMADA`)**
+
+`ReservationBffController.updateStatus(...)` -> `ReservationController.updateStatus(...)` -> `ReservationService.updateStatus(...)` -> `reservationRepository.save(...)` -> `RabbitMQPublisher.publishEmailCommand(...)` opcional -> `RabbitMQPublisher.publishHousekeepingTicket(...)` -> `RabbitMQPublisher.publishVoucherGenCommand(...)` -> `KafkaPublisher.publishReservationEvent(...)`.
+
+**Procesar los comandos**
+
+RabbitMQ enruta cada mensaje según su routing key y `NotificationListener` recibe el comando. Después delega en `NotificationService`, `HousekeepingService` o `VoucherService`. Actualmente, email sí intenta una integración externa con Resend; housekeeping y voucher solo registran la operación en los logs.
 
 ### Formato de los mensajes
 
