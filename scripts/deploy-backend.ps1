@@ -7,7 +7,7 @@ param(
     [string]$AwsRegion = "us-east-1",
     [string]$AzureResourceGroup = "",
     [string]$AzureLocation = "eastus",
-    [switch]$Execute
+    [switch]$WhatIf
 )
 
 $ErrorActionPreference = "Stop"
@@ -48,10 +48,19 @@ switch ($Target) {
         )
         Write-Host "`nComandos del despliegue local:"
         $commands | ForEach-Object { Write-Host "  $_" }
-        if ($Execute) {
+        if (-not $WhatIf) {
+            Write-Host "`nIniciando despliegue local..."
             docker compose -f docker-compose.messaging.yml up -d
+            if ($LASTEXITCODE -ne 0) {
+                throw "No se pudo iniciar la infraestructura de mensajeria."
+            }
             docker compose up -d --build
+            if ($LASTEXITCODE -ne 0) {
+                throw "No se pudo construir o iniciar los microservicios."
+            }
             Write-Host "`nDespliegue local completado."
+        } else {
+            Write-Host "`nModo WhatIf: no se ejecutaron comandos."
         }
     }
     "Aws" {

@@ -449,10 +449,10 @@ Para abrir el wizard en Windows:
 powershell -ExecutionPolicy Bypass -File .\scripts\deploy-backend.ps1
 ```
 
-Para ejecutar directamente el despliegue local:
+Al seleccionar `1. Local`, el wizard ejecuta automáticamente los dos comandos de Docker Compose. Para revisar los comandos sin ejecutarlos:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\deploy-backend.ps1 -Target Local -Execute
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy-backend.ps1 -WhatIf
 ```
 
 AWS y Azure requieren definir previamente la red, secretos, registro de imágenes, permisos y sizing del entorno. Por eso el wizard valida las herramientas y muestra el siguiente paso sin ejecutar comandos cloud irreversibles automáticamente. Las credenciales deben permanecer en el entorno local o en el proveedor cloud, nunca en el frontend ni en el repositorio.
