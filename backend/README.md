@@ -81,33 +81,121 @@ Un evento de reserva contiene, entre otros campos, `eventType`, `reservationId`,
 
 ## RabbitMQ
 
-RabbitMQ se utiliza para comandos dirigidos a una acción concreta. `ms-reservations` publica mensajes JSON en el exchange directo `cmd.direct`; `msnofity` los consume desde colas durables.
+RabbitMQ es el broker de mensajería asíncrona utilizado para enviar **comandos de trabajo** entre microservicios. Un productor publica un mensaje y el broker decide a qué cola dirigirlo; el consumidor procesa el mensaje cuando está disponible. Esto desacopla la operación de reservas de tareas secundarias como enviar un email, crear una tarea de housekeeping o generar un voucher.
 
-### Exchanges y colas
+En este proyecto RabbitMQ no reemplaza a Kafka:
 
-| Exchange | Cola | Routing key | Acción |
-| --- | --- | --- | --- |
-| `cmd.direct` | `q.cmd.email` | `email.send` | Enviar email al huésped. |
-| `cmd.direct` | `q.cmd.housekeeping` | `housekeeping.ticket` | Crear ticket de preparación de habitación. |
-| `cmd.direct` | `q.cmd.voucher` | `voucher.gen` | Generar voucher de reserva. |
-| `cmd.dlx` | `q.cmd.email.dlq` | `q.cmd.email.dlq` | Mensajes fallidos de email. |
-| `cmd.dlx` | `q.cmd.housekeeping.dlq` | `housekeeping.ticket.dlq` | Mensajes fallidos de housekeeping. |
-| `cmd.dlx` | `q.cmd.voucher.dlq` | `q.cmd.voucher.dlq` | Mensajes fallidos de vouchers. |
+| Tecnología | Papel en AndesStay |
+| --- | --- |
+| RabbitMQ | Comandos dirigidos a una acción concreta y normalmente a un único consumidor lógico. |
+| Kafka | Eventos de dominio y auditoría que pueden ser consumidos por varios grupos de consumidores. |
 
-También se declara el exchange `cmd.topic` y bindings alternativos en `msnofity` (`email.*`, `housekeeping.#` y `voucher.*`), aunque el publicador actual usa `cmd.direct`.
+### Conceptos usados
 
-Cada comando lleva un envoltorio con `type`, `traceId`, `correlationId` y `payload`. Por ejemplo, un email contiene `email`, `subject` y `body`; un ticket contiene `unitId` y `detail`; y un voucher contiene `reservationId`.
+- **Producer**: aplicación que publica el mensaje. En este caso, `ms-reservations`.
+- **Exchange**: punto de entrada que recibe el mensaje y lo enruta; el productor no publica directamente en una cola.
+- **Routing key**: clave que el exchange compara con los bindings para decidir la cola destino.
+- **Queue**: almacenamiento temporal duradero del mensaje hasta que un consumidor lo procesa.
+- **Consumer**: aplicación que escucha una cola. En este caso, `msnofity` mediante `@RabbitListener`.
+- **Binding**: relación entre un exchange, una cola y una routing key.
+- **DLX/DLQ**: dead-letter exchange y dead-letter queue; reciben mensajes que no pudieron procesarse.
 
-Cuando una reserva pasa a `CONFIRMADA`, se envían los comandos de housekeeping y voucher. El email de confirmación también se envía si `notifications.email.enabled=true`. Al crear una reserva, el email de registro está deshabilitado por defecto.
+### Topología real
 
-`msnofity` configura `default-requeue-rejected=false`: un mensaje rechazado no se reintenta automáticamente y puede terminar en su dead-letter queue según la configuración del broker.
+El exchange principal es de tipo `direct`: la routing key debe coincidir exactamente con el binding de la cola. Las colas son durables, por lo que RabbitMQ conserva su definición y los mensajes pendientes ante un reinicio del broker, según las propiedades de entrega del mensaje.
 
-### Acciones actuales de `msnofity`
+| Exchange | Cola principal | Routing key | Consumidor | Acción |
+| --- | --- | --- | --- | --- |
+| `cmd.direct` | `q.cmd.email` | `email.send` | `msnofity` | Enviar email al huésped. |
+| `cmd.direct` | `q.cmd.housekeeping` | `housekeeping.ticket` | `msnofity` | Crear ticket de preparación de habitación. |
+| `cmd.direct` | `q.cmd.voucher` | `voucher.gen` | `msnofity` | Generar voucher de reserva. |
+| `cmd.dead.dlx` | `q.cmd.email.dlq` | `q.cmd.email.dlq` | Sin consumidor de negocio | Mensajes fallidos de email. |
+| `cmd.dead.dlx` | `q.cmd.housekeeping.dlq` | `q.cmd.housekeeping.dlq` | Sin consumidor de negocio | Mensajes fallidos de housekeeping. |
+| `cmd.dead.dlx` | `q.cmd.voucher.dlq` | `q.cmd.voucher.dlq` | Sin consumidor de negocio | Mensajes fallidos de vouchers. |
 
-- Email: llama a `https://api.resend.com/emails` usando `RESEND_API_KEY` y `RESEND_FROM_EMAIL`.
-- Web push: solo registra el evento en logs; no hay proveedor externo configurado.
-- Housekeeping: solo registra el ticket; el código deja pendiente persistirlo o enviarlo a otro servicio.
-- Voucher: solo registra la generación; no se crea aún un archivo, código persistente ni envío al huésped.
+Las colas principales tienen los argumentos `x-dead-letter-exchange=cmd.dead.dlx` y una routing key de dead letter con el sufijo `.dlq`. La topología se declara en `ms-reservations` y también en `msnofity`, lo que permite que cualquiera de los dos servicios declare los recursos al arrancar. Las definiciones deben mantenerse compatibles.
+
+Aunque `ms-catalog` incluye `spring-boot-starter-amqp` y configuración de conexión, no tiene un productor, consumidor ni una configuración de colas RabbitMQ activa en el código actual. Por tanto, su relación actual con RabbitMQ es solo preparatoria.
+
+### Flujo de una reserva
+
+1. El cliente solicita una operación a través de `ms-bff`.
+2. `ms-reservations` valida y guarda la reserva en PostgreSQL.
+3. Al crear una reserva, publica un comando `EMAIL_SEND` solo cuando `notifications.email.enabled=true`. El valor predeterminado es `false`.
+4. Al cambiar el estado a `CONFIRMADA`, publica un comando `HOUSEKEEPING_TICKET` y otro `VOUCHER_GEN`. También publica el email de confirmación si las notificaciones están habilitadas.
+5. `RabbitTemplate.convertAndSend()` envía cada envoltorio al exchange `cmd.direct` con su routing key.
+6. RabbitMQ encuentra el binding correspondiente y encola el mensaje.
+7. `msnofity` recibe el mensaje con `@RabbitListener`, lee el JSON y ejecuta el servicio asociado.
+8. Si el procesamiento falla y el mensaje es rechazado, `default-requeue-rejected=false` evita el reintento automático; el mensaje puede ser enviado a la DLQ configurada.
+
+### Formato de los mensajes
+
+Todos los comandos usan un envoltorio JSON con estos campos:
+
+```json
+{
+    "eventId": "identificador-unico",
+    "type": "HOUSEKEEPING_TICKET",
+    "timestamp": 1710000000000,
+    "traceId": "traza-unica",
+    "correlationId": "RES-123",
+    "payload": {}
+}
+```
+
+`eventId` y `timestamp` se generan por defecto en `ms-reservations`; `traceId` identifica la publicación y `correlationId` relaciona el comando con la reserva. El contenido de `payload` depende del comando:
+
+| `type` | Payload principal | Resultado actual en `msnofity` |
+| --- | --- | --- |
+| `EMAIL_SEND` | `email`, `subject`, `body` | Llama a Resend mediante `https://api.resend.com/emails`. |
+| `HOUSEKEEPING_TICKET` | `unitId`, `detail` | Registra el ticket en los logs; aún no lo persiste ni lo envía a otro servicio. |
+| `VOUCHER_GEN` | `reservationId`, `customerEmail`, `voucherCode`, `amount` | Registra la generación en los logs; aún no crea un voucher persistente. |
+
+El consumidor de email también contempla el tipo `WEBPUSH`, pero actualmente solo lo registra en logs y el productor de reservas no publica ese comando.
+
+### Microservicios y código relacionado
+
+- `backend/ms-reservations`: dependencia `spring-boot-starter-amqp`, configuración de exchanges/colas/bindings en `RabbitMQConfig` y publicación en `RabbitMQPublisher`. `ReservationService` decide cuándo publicar.
+- `backend/msnofity`: conexión al broker en `application.properties`, declaración de la topología y consumo en `NotificationListener`. Los servicios `NotificationService`, `HousekeepingService` y `VoucherService` ejecutan las acciones.
+- `backend/ms-catalog`: tiene la dependencia AMQP y propiedades de conexión, pero actualmente no usa RabbitMQ funcionalmente.
+- `docker-compose.messaging.yml`: inicia el broker con la imagen `rabbitmq:3-management`.
+- `docker-compose.yml`: conecta `ms-reservations` y `msnofity` con el hostname Docker `rabbitmq`.
+
+### Configuración y ejecución
+
+RabbitMQ se ejecuta como contenedor con:
+
+| Parámetro | Valor Docker | Valor local predeterminado |
+| --- | --- | --- |
+| Host | `rabbitmq` | `localhost` |
+| Puerto AMQP | `5672` | `5672` |
+| Usuario | `guest` | `guest` |
+| Contraseña | `guest` | `guest` |
+| Consola de administración | `http://localhost:15672` | `guest` / `guest` |
+
+Para levantarlo junto con Kafka:
+
+```powershell
+docker compose -f docker-compose.messaging.yml up -d
+```
+
+Para levantar la aplicación completa, ejecutar después:
+
+```powershell
+docker compose up -d --build
+```
+
+En Docker, `ms-reservations` usa `SPRING_RABBITMQ_HOST=rabbitmq` y `SPRING_RABBITMQ_PORT=5672`; `msnofity` usa `RABBITMQ_HOST=rabbitmq`, `RABBITMQ_PORT=5672`, `RABBITMQ_USER` y `RABBITMQ_PASSWORD`. Ejecutando los servicios fuera de Docker, la conexión local usa `localhost:5672`.
+
+### Verificación y diagnóstico
+
+1. Abrir `http://localhost:15672` y revisar que existan `cmd.direct`, las tres colas principales y las DLQ.
+2. Crear una reserva y comprobar que `ms-reservations` registra la publicación solo si corresponde al estado/configuración.
+3. Confirmar una reserva y revisar los logs de `msnofity` para las rutas `q.cmd.housekeeping` y `q.cmd.voucher`.
+4. Si el email está habilitado, configurar `RESEND_API_KEY` y `RESEND_FROM_EMAIL`; sin esas variables el consumo del email puede fallar.
+5. Revisar las DLQ si una cola principal acumula mensajes o si un consumidor rechaza el procesamiento.
+
+RabbitMQ no garantiza por sí mismo que una operación de negocio y su publicación sean atómicas: la reserva se guarda en PostgreSQL y el comando se publica después desde la misma lógica de servicio. Para producción convendría evaluar confirmaciones del publisher, reintentos controlados, consumidores idempotentes y un patrón outbox.
 
 ## API expuesta por el BFF
 
