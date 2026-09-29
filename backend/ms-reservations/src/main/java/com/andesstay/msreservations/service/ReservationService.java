@@ -19,7 +19,9 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -31,8 +33,8 @@ public class ReservationService {
     private final KafkaPublisher kafkaPublisher;
     private final UnitValidationService unitValidationService;
 
-        @Value("${notifications.email.enabled:false}")
-        private boolean emailNotificationsEnabled;
+    @Value("${notifications.email.enabled:false}")
+    private boolean emailNotificationsEnabled;
 
     @Transactional
     public ReservationResponse createReservation(ReservationRequest request, String currentUser) {
@@ -148,6 +150,13 @@ public class ReservationService {
                     updated.getTotalAmount(),
                     correlationId
             );
+
+            // Novedad: Publicación del evento Pub/Sub al exchange Fanout
+            Map<String, Object> evtPayload = new HashMap<>();
+            evtPayload.put("reservationId", updated.getId());
+            evtPayload.put("unitId", updated.getUnitId());
+            evtPayload.put("status", "CONFIRMADA");
+            rabbitPublisher.publishReservationConfirmed(updated.getId(), evtPayload);
         }
 
         kafkaPublisher.publishReservationEvent("RESERVATION_STATUS_UPDATED", updated, currentUser);

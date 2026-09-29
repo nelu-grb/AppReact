@@ -14,6 +14,7 @@ public class RabbitMQConfig {
     public static final String EXCHANGE_DIRECT = "cmd.direct";
     public static final String EXCHANGE_TOPIC = "cmd.topic";
     public static final String EXCHANGE_DLX = "cmd.dead.dlx";
+    public static final String EVT_EXCHANGE = "evt.fanout"; // <-- Novedad: Exchange Fanout
 
     // Queues
     public static final String QUEUE_EMAIL = "q.cmd.email";
@@ -25,17 +26,23 @@ public class RabbitMQConfig {
 
     @Bean
     public DirectExchange directExchange() {
-        return new DirectExchange(EXCHANGE_DIRECT);
+        return new DirectExchange(EXCHANGE_DIRECT, true, false); // Explicitamente durable
     }
 
     @Bean
     public TopicExchange topicExchange() {
-        return new TopicExchange(EXCHANGE_TOPIC);
+        return new TopicExchange(EXCHANGE_TOPIC, true, false);
     }
 
     @Bean
     public DirectExchange deadLetterExchange() {
-        return new DirectExchange(EXCHANGE_DLX);
+        return new DirectExchange(EXCHANGE_DLX, true, false);
+    }
+
+    // Nuevo Bean para Pub/Sub Fanout
+    @Bean
+    public FanoutExchange evtExchange() {
+        return new FanoutExchange(EVT_EXCHANGE, true, false);
     }
 
     @Bean

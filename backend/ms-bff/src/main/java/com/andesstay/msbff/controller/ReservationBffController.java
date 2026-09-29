@@ -5,6 +5,7 @@ import com.andesstay.msbff.dto.ReservationResponse;
 import com.andesstay.msbff.dto.StatusUpdateRequest;
 import jakarta.validation.Valid;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
@@ -19,7 +20,6 @@ import java.util.List;
 public class ReservationBffController {
 
     private final WebClient reservationsWebClient;
-
 
     public ReservationBffController(WebClient reservationsWebClient) {
         this.reservationsWebClient = reservationsWebClient;
@@ -72,24 +72,13 @@ public class ReservationBffController {
                 .bodyToMono(ReservationResponse.class);
     }
 
-        private String actorName(Jwt jwt) {
-                String preferredUsername = jwt.getClaimAsString("preferred_username");
-                if (preferredUsername != null && !preferredUsername.isBlank()) return preferredUsername;
-
-                String uniqueName = jwt.getClaimAsString("unique_name");
-                if (uniqueName != null && !uniqueName.isBlank()) return uniqueName;
-
-                String name = jwt.getClaimAsString("name");
-                return name != null && !name.isBlank() ? name : jwt.getSubject();
-        }
-
-        @DeleteMapping("/{id}")
-        public Mono<Void> delete(@PathVariable Long id) {
-                return reservationsWebClient.delete()
-                                .uri("/api/reservations/{id}", id)
-                                .retrieve()
-                                .bodyToMono(Void.class);
-        }
+    @DeleteMapping("/{id}")
+    public Mono<Void> delete(@PathVariable Long id) {
+        return reservationsWebClient.delete()
+                .uri("/api/reservations/{id}", id)
+                .retrieve()
+                .bodyToMono(Void.class);
+    }
 
     @GetMapping("/by-unit/{unitId}")
     public Mono<List<ReservationResponse>> getByUnit(@PathVariable Long unitId) {
@@ -97,5 +86,39 @@ public class ReservationBffController {
                 .uri("/api/reservations/by-unit/{unitId}", unitId)
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<List<ReservationResponse>>() {});
+    }
+
+    @PostMapping("/{id}/pay")
+    public Mono<ResponseEntity<Object>> payReservation(@PathVariable Long id) {
+        return reservationsWebClient.post()
+                .uri("/api/reservations/{id}/pay", id)
+                .retrieve()
+                .toEntity(Object.class);
+    }
+
+    @PostMapping("/confirm-payment")
+    public Mono<ResponseEntity<Object>> confirmPayment(@RequestParam("token_ws") String tokenWs,
+                                                       @AuthenticationPrincipal Jwt jwt) {
+        return reservationsWebClient.post()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/api/reservations/confirm-payment")
+                        .queryParam("token_ws", tokenWs)
+                        .build())
+                .header("X-Actor", actorName(jwt))
+                .retrieve()
+                .toEntity(Object.class);
+    }
+
+    private String actorName(Jwt jwt) {
+        if (jwt == null) return "SYSTEM_WEBPAY";
+
+        String preferredUsername = jwt.getClaimAsString("preferred_username");
+        if (preferredUsername != null && !preferredUsername.isBlank()) return preferredUsername;
+
+        String uniqueName = jwt.getClaimAsString("unique_name");
+        if (uniqueName != null && !uniqueName.isBlank()) return uniqueName;
+
+        String name = jwt.getClaimAsString("name");
+        return name != null && !name.isBlank() ? name : jwt.getSubject();
     }
 }

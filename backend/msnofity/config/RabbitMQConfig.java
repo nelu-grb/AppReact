@@ -11,6 +11,8 @@ public class RabbitMQConfig {
 
     public static final String EXCHANGE_DIRECT = "cmd.direct";
     public static final String EXCHANGE_DLX = "cmd.dead.dlx";
+    public static final String EVT_EXCHANGE = "evt.fanout";
+    public static final String EVT_NOTIFY_QUEUE = "q.evt.notify";
 
     @Value("${app.rabbitmq.queue.email}")
     private String emailQueue;
@@ -33,23 +35,51 @@ public class RabbitMQConfig {
         return voucherQueue + ".dlq";
     }
 
-    // Direct Exchange único
+    // Direct Exchange y DLX durables
     @Bean
     public DirectExchange directExchange() {
-        return new DirectExchange(EXCHANGE_DIRECT);
+        return new DirectExchange(EXCHANGE_DIRECT, true, false);
     }
 
     @Bean
     public DirectExchange deadLetterExchange() {
-        return new DirectExchange(EXCHANGE_DLX);
+        return new DirectExchange(EXCHANGE_DLX, true, false);
     }
 
-    // Definición de Colas
+    // Exchange Fanout para Pub/Sub (debe coincidir con ms-reservations)
+    @Bean
+    public FanoutExchange evtExchange() {
+        return new FanoutExchange(EVT_EXCHANGE, true, false);
+    }
+
+    // Cola durable fija para recibir eventos Pub/Sub (persiste si msnofity está caído)
+    @Bean
+    public Queue evtNotifyQueue() {
+        return QueueBuilder.durable(EVT_NOTIFY_QUEUE).build();
+    }
+
+    @Bean
+    public Binding evtNotifyBinding(FanoutExchange evtExchange, Queue evtNotifyQueue) {
+        return BindingBuilder.bind(evtNotifyQueue).to(evtExchange);
+    }
+
+    // Cola TEMPORAL para monitoreo (se crea al iniciar y se borra al desconectarse)
+    @Bean
+    public Queue evtMonitorQueue() {
+        return new AnonymousQueue();
+    }
+
+    @Bean
+    public Binding evtMonitorBinding(FanoutExchange evtExchange, Queue evtMonitorQueue) {
+        return BindingBuilder.bind(evtMonitorQueue).to(evtExchange);
+    }
+
+    // Definición de Colas de Comandos
     @Bean
     public Queue emailQueue() {
         return QueueBuilder.durable(emailQueue)
             .withArgument("x-dead-letter-exchange", EXCHANGE_DLX)
-                .withArgument("x-dead-letter-routing-key", emailDeadLetterQueueName())
+            .withArgument("x-dead-letter-routing-key", emailDeadLetterQueueName())
             .build();
     }
 
@@ -57,16 +87,16 @@ public class RabbitMQConfig {
     public Queue housekeepingQueue() {
         return QueueBuilder.durable(housekeepingQueue)
             .withArgument("x-dead-letter-exchange", EXCHANGE_DLX)
-                .withArgument("x-dead-letter-routing-key", housekeepingDeadLetterQueueName())
+            .withArgument("x-dead-letter-routing-key", housekeepingDeadLetterQueueName())
             .build();
     }
 
     @Bean
     public Queue voucherQueue() {
         return QueueBuilder.durable(voucherQueue)
-                .withArgument("x-dead-letter-exchange", EXCHANGE_DLX)
-                .withArgument("x-dead-letter-routing-key", voucherDeadLetterQueueName())
-                .build();
+            .withArgument("x-dead-letter-exchange", EXCHANGE_DLX)
+            .withArgument("x-dead-letter-routing-key", voucherDeadLetterQueueName())
+            .build();
     }
 
     @Bean
@@ -117,5 +147,4 @@ public class RabbitMQConfig {
                                             @Qualifier("deadLetterExchange") DirectExchange deadLetterExchange) {
         return BindingBuilder.bind(voucherDeadLetterQueue).to(deadLetterExchange).with(voucherDeadLetterQueueName());
     }
-
 }
