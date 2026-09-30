@@ -22,8 +22,13 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
-            .authorizeExchange(exchange -> exchange.anyExchange().authenticated())
-            .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {}));
+            .authorizeExchange(exchange -> exchange
+                .pathMatchers("/reservations/**", "/api/reservations/**").permitAll()
+                .anyExchange().permitAll()
+            );
+            // Comentado temporalmente para pruebas locales (evita requerir token JWT de Azure):
+            // .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {}));
+
         return http.build();
     }
 
@@ -34,7 +39,7 @@ public class SecurityConfig {
             "https://ashy-stone-0e63b4a0f.6.azurestaticapps.net"
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Actor"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;
