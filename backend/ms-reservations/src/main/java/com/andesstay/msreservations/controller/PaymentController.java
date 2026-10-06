@@ -1,12 +1,14 @@
 package com.andesstay.msreservations.controller;
 
 import com.andesstay.msreservations.dto.PaymentInitResponseDto;
-import com.andesstay.msreservations.entity.Reservation;
+import com.andesstay.msreservations.dto.StatusUpdateRequest;
+import com.andesstay.msreservations.model.Reservation;
+import com.andesstay.msreservations.model.ReservationStatus;
 import com.andesstay.msreservations.repository.ReservationRepository;
 import com.andesstay.msreservations.service.ReservationService;
 import com.andesstay.msreservations.service.WebpayService;
-import cl.transbank.webpay.webpayplus.responses.WebpayPlusTransactionCommitResponse;
-import cl.transbank.webpay.webpayplus.responses.WebpayPlusTransactionCreateResponse;
+import com.andesstay.msreservations.service.WebpayService.WebpayCommitResponse;
+import com.andesstay.msreservations.service.WebpayService.WebpayCreateResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -30,7 +32,7 @@ public class PaymentController {
 
         try {
             String sessionId = "SESS-" + reservation.getGuestId();
-            WebpayPlusTransactionCreateResponse response = webpayService.createTransaction(
+            WebpayCreateResponse response = webpayService.createTransaction(
                     reservation.getId(),
                     sessionId,
                     reservation.getTotalAmount()
@@ -47,13 +49,15 @@ public class PaymentController {
     public ResponseEntity<?> confirmarPago(@RequestParam("token_ws") String token,
                                            @RequestHeader(value = "X-Actor", defaultValue = "SYSTEM_WEBPAY") String actor) {
         try {
-            WebpayPlusTransactionCommitResponse response = webpayService.commitTransaction(token);
+            WebpayCommitResponse response = webpayService.commitTransaction(token);
 
             if (response.getResponseCode() == 0 && "AUTHORIZED".equals(response.getStatus())) {
                 Long reservationId = Long.parseLong(response.getBuyOrder().replace("ORD-", ""));
 
-                // Transiciona el estado a CONFIRMADA, activando los eventos RabbitMQ y Kafka
-                reservationService.updateStatus(reservationId, "CONFIRMADA", actor);
+                StatusUpdateRequest statusRequest = new StatusUpdateRequest();
+                statusRequest.setStatus(ReservationStatus.CONFIRMADA);
+
+                reservationService.updateStatus(reservationId, statusRequest, actor);
 
                 return ResponseEntity.ok(Map.of(
                         "status", "APPROVED",

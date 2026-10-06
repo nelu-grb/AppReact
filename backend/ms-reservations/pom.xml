@@ -78,12 +78,6 @@
 
         <!-- Transbank Webpay SDK -->
         <dependency>
-            <groupId>cl.transbank.webpay</groupId>
-            <artifactId>webpay-sdk-java</artifactId>
-            <version>4.0.0</version>
-        </dependency>
-
-        <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <version>1.18.34</version>

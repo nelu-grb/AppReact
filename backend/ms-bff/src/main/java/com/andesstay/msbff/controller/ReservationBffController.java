@@ -106,7 +106,11 @@ public class ReservationBffController {
                         .build())
                 .header("X-Actor", actorName(jwt))
                 .retrieve()
-                .toEntity(Object.class);
+                .toEntity(Object.class)
+                .onErrorResume(org.springframework.web.reactive.function.client.WebClientResponseException.class,
+                        ex -> Mono.just(ResponseEntity.status(ex.getStatusCode()).body(ex.getResponseBodyAsString())))
+                .onErrorResume(ex -> Mono.just(ResponseEntity.status(400)
+                        .body("{\"message\": \"No se pudo confirmar el pago con el servicio de reservas.\"}")));
     }
 
     private String actorName(Jwt jwt) {

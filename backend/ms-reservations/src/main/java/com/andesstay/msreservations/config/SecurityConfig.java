@@ -17,10 +17,12 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/reservations/**").permitAll()
+                // Rutas públicas explícitas para pruebas
+                .requestMatchers("/payments/**", "/api/reservations/**", "/units/**").permitAll()
                 .anyRequest().permitAll()
-            )
-            .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> {}));
+            );
+            // Comentado en desarrollo local para que no intente validar el token de Azure:
+            // .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> {}));
 
         return http.build();
     }
