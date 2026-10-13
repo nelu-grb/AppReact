@@ -11,6 +11,8 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./backend/ms-catalog/src/main/resources/init.sql:/docker-entrypoint-initdb.d/01-init-catalog.sql
+      - ./backend/ms-reservations/src/main/resources/init-reservations.sql:/docker-entrypoint-initdb.d/02-init-reservations.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d andesstay_db"]
       interval: 5s
