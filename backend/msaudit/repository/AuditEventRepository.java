@@ -10,4 +10,5 @@ import java.util.List;
 public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
     List<AuditEvent> findByAggregateIdOrderByTimestampDesc(String aggregateId);
     List<AuditEvent> findByEventType(String eventType);
+    boolean existsByEventId(String eventId);
 }

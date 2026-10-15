@@ -1,8 +1,10 @@
 package com.react.backend.msaudit.listener;
 
 import com.react.backend.msaudit.service.AuditService;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -22,19 +24,35 @@ public class AuditKafkaListener {
     }
 
     @KafkaListener(topics = "audit.timeline", groupId = "audit-group")
-    public void consume(String message) {
-        log.info("Evento de auditoría capturado desde Kafka: {}", message);
+    public void consume(ConsumerRecord<String, String> record) {
+        String message = record.value();
+        JsonNode event;
         try {
-            JsonNode event = objectMapper.readTree(message);
+            event = objectMapper.readTree(message);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalArgumentException("Evento de auditoría no contiene JSON válido", exception);
+        }
+
+        String eventType = event.path("eventType").asText();
+        String aggregateId = event.hasNonNull("reservationId")
+                ? event.path("reservationId").asText()
+                : event.hasNonNull("unitId")
+                        ? event.path("unitId").asText()
+                        : event.path("entityId").asText();
+        if (eventType.isBlank() || aggregateId.isBlank()) {
+            throw new IllegalArgumentException("Evento de auditoría debe incluir eventType y un identificador");
+        }
+
+        try {
             auditService.saveEvent(
-                    event.path("eventType").asText("DOMAIN_EVENT"),
-                        event.has("reservationId")
-                            ? event.path("reservationId").asText()
-                            : event.path("unitId").asText("N/A"),
-                    event.path("actor").asText("KAFKA_CONSUMER"),
+                    record.topic() + ":" + record.partition() + ":" + record.offset(),
+                    eventType,
+                    aggregateId,
+                    event.path("actorId").asText(event.path("actor").asText("KAFKA_CONSUMER")),
                     message);
-        } catch (Exception exception) {
-            log.warn("Evento Kafka no tiene el formato esperado", exception);
+        } catch (RuntimeException exception) {
+            log.error("No se pudo guardar el evento de auditoría {}", eventType, exception);
+            throw exception;
         }
     }
 }

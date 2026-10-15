@@ -37,7 +37,7 @@ public class ReservationService {
     private boolean emailNotificationsEnabled;
 
     @Transactional
-    public ReservationResponse createReservation(ReservationRequest request, String currentUser) {
+    public ReservationResponse createReservation(ReservationRequest request, String currentUser, String actorName) {
         unitValidationService.validateUnitAvailability(request.getUnitId(), request.getStartDate(), request.getEndDate());
 
         UnitDto unit = unitValidationService.getUnit(request.getUnitId());
@@ -73,7 +73,14 @@ public class ReservationService {
                     correlationId
             );
         }
-        kafkaPublisher.publishReservationEvent("RESERVATION_CREATED", saved, currentUser);
+        kafkaPublisher.publishReservationEvent(
+                "RESERVATION_CREATED",
+                saved,
+                currentUser,
+                actorName,
+                unit.getName(),
+                null
+        );
 
         return mapToResponse(saved);
     }
@@ -112,10 +119,11 @@ public class ReservationService {
     }
 
     @Transactional
-    public ReservationResponse updateStatus(Long id, StatusUpdateRequest request, String currentUser) {
+    public ReservationResponse updateStatus(Long id, StatusUpdateRequest request, String currentUser, String actorName) {
         Reservation reservation = reservationRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Reserva no encontrada con ID: " + id));
 
+        ReservationStatus previousStatus = reservation.getStatus();
         ReservationStatus nextStatus = request.getStatus();
 
         // Regla de Negocio: No se puede hacer check-in sin CONFIRMAR previamente
@@ -125,6 +133,7 @@ public class ReservationService {
             throw new IllegalStateException("Error de Flujo: No se puede transicionar a Check-In sin confirmar la reserva previa.");
         }
 
+        UnitDto unit = unitValidationService.getUnit(reservation.getUnitId());
         reservation.setStatus(nextStatus);
         Reservation updated = reservationRepository.save(reservation);
 
@@ -159,7 +168,14 @@ public class ReservationService {
             rabbitPublisher.publishReservationConfirmed(updated.getId(), evtPayload);
         }
 
-        kafkaPublisher.publishReservationEvent("RESERVATION_STATUS_UPDATED", updated, currentUser);
+        kafkaPublisher.publishReservationEvent(
+                "RESERVATION_STATUS_UPDATED",
+                updated,
+                currentUser,
+                actorName,
+                unit == null ? null : unit.getName(),
+                previousStatus
+        );
 
         return mapToResponse(updated);
     }

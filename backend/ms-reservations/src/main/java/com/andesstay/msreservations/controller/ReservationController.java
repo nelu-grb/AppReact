@@ -28,9 +28,13 @@ public class ReservationController {
     public ResponseEntity<ReservationResponse> createReservation(
             @Valid @RequestBody ReservationRequest request,
             @AuthenticationPrincipal Jwt jwt,
-            @RequestHeader(value = "X-Actor", required = false) String actorHeader) {
+            @RequestHeader(value = "X-Actor", required = false) String actorHeader,
+            @RequestHeader(value = "X-Actor-Name", required = false) String actorNameHeader) {
         String actor = actorHeader != null && !actorHeader.isBlank() ? actorHeader : actor(jwt);
-        ReservationResponse response = reservationService.createReservation(request, actor);
+        String actorName = actorNameHeader != null && !actorNameHeader.isBlank()
+                ? actorNameHeader
+                : actorDisplayName(jwt, actor);
+        ReservationResponse response = reservationService.createReservation(request, actor, actorName);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
@@ -44,9 +48,13 @@ public class ReservationController {
             @PathVariable Long id,
             @Valid @RequestBody StatusUpdateRequest request,
             @AuthenticationPrincipal Jwt jwt,
-            @RequestHeader(value = "X-Actor", required = false) String actorHeader) {
+            @RequestHeader(value = "X-Actor", required = false) String actorHeader,
+            @RequestHeader(value = "X-Actor-Name", required = false) String actorNameHeader) {
         String actor = actorHeader != null && !actorHeader.isBlank() ? actorHeader : actor(jwt);
-        ReservationResponse response = reservationService.updateStatus(id, request, actor);
+        String actorName = actorNameHeader != null && !actorNameHeader.isBlank()
+                ? actorNameHeader
+                : actorDisplayName(jwt, actor);
+        ReservationResponse response = reservationService.updateStatus(id, request, actor, actorName);
         return ResponseEntity.ok(response);
     }
 
@@ -61,6 +69,12 @@ public class ReservationController {
 
         String name = jwt.getClaimAsString("name");
         return name != null && !name.isBlank() ? name : jwt.getSubject();
+    }
+
+    private String actorDisplayName(Jwt jwt, String actor) {
+        if (jwt == null) return actor;
+        String name = jwt.getClaimAsString("name");
+        return name != null && !name.isBlank() ? name : actor;
     }
 
     @GetMapping

@@ -30,7 +30,8 @@ public class ReservationBffController {
                                              @AuthenticationPrincipal Jwt jwt) {
         return reservationsWebClient.post()
                 .uri("/api/reservations")
-                .header("X-Actor", actorName(jwt))
+                .header("X-Actor", actorId(jwt))
+                .header("X-Actor-Name", actorDisplayName(jwt))
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(ReservationResponse.class);
@@ -66,7 +67,8 @@ public class ReservationBffController {
                                                    @AuthenticationPrincipal Jwt jwt) {
         return reservationsWebClient.put()
                 .uri("/api/reservations/{id}/status", id)
-                .header("X-Actor", actorName(jwt))
+                .header("X-Actor", actorId(jwt))
+                .header("X-Actor-Name", actorDisplayName(jwt))
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(ReservationResponse.class);
@@ -104,7 +106,8 @@ public class ReservationBffController {
                         .path("/api/reservations/confirm-payment")
                         .queryParam("token_ws", tokenWs)
                         .build())
-                .header("X-Actor", actorName(jwt))
+                .header("X-Actor", actorId(jwt))
+                .header("X-Actor-Name", actorDisplayName(jwt))
                 .retrieve()
                 .toEntity(Object.class)
                 .onErrorResume(org.springframework.web.reactive.function.client.WebClientResponseException.class,
@@ -113,7 +116,7 @@ public class ReservationBffController {
                         .body("{\"message\": \"No se pudo confirmar el pago con el servicio de reservas.\"}")));
     }
 
-    private String actorName(Jwt jwt) {
+    private String actorId(Jwt jwt) {
         if (jwt == null) return "SYSTEM_WEBPAY";
 
         String preferredUsername = jwt.getClaimAsString("preferred_username");
@@ -124,5 +127,11 @@ public class ReservationBffController {
 
         String name = jwt.getClaimAsString("name");
         return name != null && !name.isBlank() ? name : jwt.getSubject();
+    }
+
+    private String actorDisplayName(Jwt jwt) {
+        if (jwt == null) return "Sistema Webpay";
+        String name = jwt.getClaimAsString("name");
+        return name != null && !name.isBlank() ? name : actorId(jwt);
     }
 }
