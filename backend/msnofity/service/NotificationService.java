@@ -21,9 +21,10 @@ public class NotificationService {
     public NotificationService(
             RestClient.Builder restClientBuilder,
             @Value("${resend.api-key}") String apiKey,
-            @Value("${resend.from-email}") String fromEmail) {
+            @Value("${resend.from-email}") String fromEmail,
+            @Value("${resend.base-url:https://api.resend.com}") String baseUrl) {
         this.resendClient = restClientBuilder
-                .baseUrl("https://api.resend.com")
+                .baseUrl(baseUrl)
                 .defaultHeader("Authorization", "Bearer " + apiKey)
                 .build();
         this.fromEmail = fromEmail;
