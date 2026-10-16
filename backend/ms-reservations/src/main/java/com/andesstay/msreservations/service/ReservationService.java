@@ -176,7 +176,7 @@ public class ReservationService {
                     correlationId
             );
 
-            // Novedad: Publicación del evento Pub/Sub al exchange Fanout
+            // publica el evento de confirmación para todos los servicios suscritos.
             Map<String, Object> evtPayload = new HashMap<>();
             evtPayload.put("reservationId", updated.getId());
             evtPayload.put("unitId", updated.getUnitId());

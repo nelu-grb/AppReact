@@ -10,6 +10,7 @@ import com.andesstay.msreservations.service.WebpayService;
 import com.andesstay.msreservations.service.WebpayService.WebpayCommitResponse;
 import com.andesstay.msreservations.service.WebpayService.WebpayCreateResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -22,6 +23,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/reservations")
 @RequiredArgsConstructor
+@Slf4j
 public class PaymentController {
 
     private final WebpayService webpayService;
@@ -42,8 +44,9 @@ public class PaymentController {
 
             return ResponseEntity.ok(new PaymentInitResponseDto(response.getUrl(), response.getToken()));
         } catch (Exception e) {
+            log.error("No se pudo iniciar el pago de la reserva {}", id, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error al iniciar pago en Webpay: " + e.getMessage()));
+                    .body(Map.of("error", "No se pudo iniciar el pago. Inténtalo de nuevo."));
         }
     }
 
@@ -76,8 +79,9 @@ public class PaymentController {
         } catch (ResponseStatusException e) {
             throw e;
         } catch (Exception e) {
+            log.error("No se pudo confirmar el pago en Webpay", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error confirmando transacción: " + e.getMessage()));
+                    .body(Map.of("error", "No se pudo confirmar el pago. Inténtalo de nuevo."));
         }
     }
 

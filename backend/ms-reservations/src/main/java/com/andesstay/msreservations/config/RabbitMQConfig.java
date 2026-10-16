@@ -10,13 +10,13 @@ import org.springframework.beans.factory.annotation.Qualifier;
 @Configuration
 public class RabbitMQConfig {
 
-    // Exchanges
+    // intercambios de mensajes.
     public static final String EXCHANGE_DIRECT = "cmd.direct";
     public static final String EXCHANGE_TOPIC = "cmd.topic";
     public static final String EXCHANGE_DLX = "cmd.dead.dlx";
-    public static final String EVT_EXCHANGE = "evt.fanout"; // <-- Novedad: Exchange Fanout
+    public static final String EVT_EXCHANGE = "evt.fanout";
 
-    // Queues
+    // colas para procesar los comandos.
     public static final String QUEUE_EMAIL = "q.cmd.email";
     public static final String QUEUE_HOUSEKEEPING = "q.cmd.housekeeping";
     public static final String QUEUE_VOUCHER = "q.cmd.voucher";
@@ -26,7 +26,7 @@ public class RabbitMQConfig {
 
     @Bean
     public DirectExchange directExchange() {
-        return new DirectExchange(EXCHANGE_DIRECT, true, false); // Explicitamente durable
+        return new DirectExchange(EXCHANGE_DIRECT, true, false); // se mantiene en el broker.
     }
 
     @Bean
@@ -39,7 +39,7 @@ public class RabbitMQConfig {
         return new DirectExchange(EXCHANGE_DLX, true, false);
     }
 
-    // Nuevo Bean para Pub/Sub Fanout
+    // intercambia eventos con todos los servicios suscritos.
     @Bean
     public FanoutExchange evtExchange() {
         return new FanoutExchange(EVT_EXCHANGE, true, false);

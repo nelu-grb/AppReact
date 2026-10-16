@@ -40,11 +40,11 @@ public class SecurityConfig {
         OAuth2TokenValidator<Jwt> audienceValidator = jwt -> jwt.getAudience().contains(audience)
                 ? OAuth2TokenValidatorResult.success()
                 : OAuth2TokenValidatorResult.failure(
-                        new OAuth2Error("invalid_token", "Token audience is not valid for this API", null));
+                        new OAuth2Error("invalid_token", "El token no corresponde a esta api", null));
         OAuth2TokenValidator<Jwt> scopeValidator = jwt -> hasRequiredScope(jwt)
                 ? OAuth2TokenValidatorResult.success()
                 : OAuth2TokenValidatorResult.failure(
-                        new OAuth2Error("invalid_token", "Required delegated API scope is missing", null));
+                        new OAuth2Error("invalid_token", "Al token le falta el permiso delegado requerido", null));
 
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                 JwtValidators.createDefaultWithIssuer(issuerUri),
