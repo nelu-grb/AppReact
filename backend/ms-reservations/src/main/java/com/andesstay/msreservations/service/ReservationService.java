@@ -9,6 +9,7 @@ import com.andesstay.msreservations.messaging.RabbitMQPublisher;
 import com.andesstay.msreservations.model.Reservation;
 import com.andesstay.msreservations.model.ReservationStatus;
 import com.andesstay.msreservations.repository.ReservationRepository;
+import com.andesstay.msreservations.security.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -38,27 +39,30 @@ public class ReservationService {
     private boolean emailNotificationsEnabled;
 
     @Transactional
-    public ReservationResponse createReservation(ReservationRequest request, String currentUser, Jwt jwt) {
+    public ReservationResponse createReservation(
+            ReservationRequest request, AuthenticatedUser user, Jwt jwt) {
         unitValidationService.validateUnitAvailability(
                 request.getUnitId(), request.getStartDate(), request.getEndDate(), jwt);
 
         UnitDto unit = unitValidationService.getUnit(request.getUnitId(), jwt);
         if (unit == null || unit.getPricePerNight() == null || unit.getPricePerNight().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("No se pudo obtener el precio por noche de la unidad");
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "No se pudo obtener el precio por noche de la unidad");
         }
 
         long nights = ChronoUnit.DAYS.between(request.getStartDate(), request.getEndDate());
         if (nights <= 0) {
-            throw new IllegalArgumentException("La fecha de salida debe ser posterior a la fecha de entrada");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La fecha de salida debe ser posterior a la fecha de entrada");
         }
 
         BigDecimal totalAmount = unit.getPricePerNight().multiply(BigDecimal.valueOf(nights));
 
         Reservation reservation = Reservation.builder()
                 .unitId(request.getUnitId())
-                .guestId(request.getGuestId())
-                .guestEmail(request.getGuestEmail())
-                .ownerOid(request.getOwnerOid())
+                .guestId(user.requireName())
+                .guestEmail(user.requireEmail())
+                .ownerOid(user.requireOid())
                 .startDate(request.getStartDate())
                 .endDate(request.getEndDate())
                 .totalAmount(totalAmount)
@@ -76,34 +80,41 @@ public class ReservationService {
                     correlationId
             );
         }
-        kafkaPublisher.publishReservationEvent("RESERVATION_CREATED", saved, currentUser);
+        kafkaPublisher.publishReservationEvent("RESERVATION_CREATED", saved, user.actor());
 
         return mapToResponse(saved);
     }
 
-    public ReservationResponse getReservationById(Long id) {
-        Reservation reservation = reservationRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Reserva no encontrada con ID: " + id));
-        return mapToResponse(reservation);
+    public ReservationResponse getReservationByIdForUser(Long id, AuthenticatedUser user) {
+        return mapToResponse(getReservationForUser(id, user));
     }
 
-    public ReservationResponse getReservationByIdForOwner(Long id, String ownerOid) {
-        Reservation reservation = reservationRepository.findByIdAndOwnerOid(id, ownerOid)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reserva no encontrada"));
-        return mapToResponse(reservation);
+    public Reservation getReservationForUser(Long id, AuthenticatedUser user) {
+        return user.canViewAllReservations()
+                ? reservationRepository.findById(id)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reserva no encontrada"))
+                : reservationRepository.findByIdAndOwnerOid(id, user.requireOid())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reserva no encontrada"));
     }
 
-    public List<ReservationResponse> getReservations(ReservationStatus status, LocalDate from, LocalDate to) {
+    private List<ReservationResponse> getReservations(ReservationStatus status, LocalDate from, LocalDate to) {
         return reservationRepository.findByFilters(status, from, to).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
 
-    public List<ReservationResponse> getReservationsForOwner(
+    private List<ReservationResponse> getReservationsForOwner(
             String ownerOid, ReservationStatus status, LocalDate from, LocalDate to) {
         return reservationRepository.findByOwnerOidAndFilters(ownerOid, status, from, to).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
+    }
+
+    public List<ReservationResponse> getReservationsForUser(
+            AuthenticatedUser user, ReservationStatus status, LocalDate from, LocalDate to) {
+        return user.canViewAllReservations()
+                ? getReservations(status, from, to)
+                : getReservationsForOwner(user.requireOid(), status, from, to);
     }
 
     public List<ReservationResponse> getReservationsByUnit(Long unitId) {
@@ -130,15 +141,13 @@ public class ReservationService {
     @Transactional
     public ReservationResponse updateStatus(Long id, StatusUpdateRequest request, String currentUser) {
         Reservation reservation = reservationRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Reserva no encontrada con ID: " + id));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reserva no encontrada"));
 
         ReservationStatus nextStatus = request.getStatus();
 
-        // Regla de Negocio: No se puede hacer check-in sin CONFIRMAR previamente
-        if ((nextStatus == ReservationStatus.CHECKIN_PENDIENTE || nextStatus == ReservationStatus.EN_ESTADIA)
-                && reservation.getStatus() != ReservationStatus.CONFIRMADA
-                && reservation.getStatus() != ReservationStatus.CHECKIN_PENDIENTE) {
-            throw new IllegalStateException("Error de Flujo: No se puede transicionar a Check-In sin confirmar la reserva previa.");
+        if (!reservation.getStatus().canTransitionTo(nextStatus)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "No se puede cambiar la reserva de " + reservation.getStatus() + " a " + nextStatus);
         }
 
         reservation.setStatus(nextStatus);

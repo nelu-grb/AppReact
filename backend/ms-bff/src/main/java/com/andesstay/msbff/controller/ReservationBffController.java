@@ -4,42 +4,30 @@ import com.andesstay.msbff.dto.ReservationRequest;
 import com.andesstay.msbff.dto.ReservationResponse;
 import com.andesstay.msbff.dto.StatusUpdateRequest;
 import jakarta.validation.Valid;
-import jakarta.validation.ConstraintViolation;
-import jakarta.validation.Validator;
-import org.springframework.http.HttpStatus;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Set;
 
 @RestController
 @RequestMapping("/reservations")
 public class ReservationBffController {
 
     private final WebClient reservationsWebClient;
-    private final Validator validator;
 
-    public ReservationBffController(WebClient reservationsWebClient, Validator validator) {
+    public ReservationBffController(WebClient reservationsWebClient) {
         this.reservationsWebClient = reservationsWebClient;
-        this.validator = validator;
     }
 
     @PostMapping
-    public Mono<ReservationResponse> create(@RequestBody ReservationRequest request,
+    public Mono<ReservationResponse> create(@Valid @RequestBody ReservationRequest request,
                                             @AuthenticationPrincipal Jwt jwt) {
-        request.setOwnerOid(requiredClaim(jwt, "oid"));
-        request.setGuestId(requiredClaim(jwt, "name"));
-        request.setGuestEmail(requiredEmail(jwt));
-        validate(request);
-
         return reservationsWebClient.post()
                 .uri("/api/reservations")
                 .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
@@ -135,30 +123,4 @@ public class ReservationBffController {
                         .body("{\"message\": \"No se pudo confirmar el pago con el servicio de reservas.\"}")));
     }
 
-    private void validate(ReservationRequest request) {
-        Set<ConstraintViolation<ReservationRequest>> violations = validator.validate(request);
-        if (!violations.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, violations.iterator().next().getMessage());
-        }
-    }
-
-    private String requiredClaim(Jwt jwt, String claimName) {
-        String value = jwt.getClaimAsString(claimName);
-        if (value == null || value.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "The access token is missing the required " + claimName + " claim");
-        }
-        return value;
-    }
-
-    private String requiredEmail(Jwt jwt) {
-        for (String claim : List.of("email", "preferred_username", "upn", "unique_name")) {
-            String value = jwt.getClaimAsString(claim);
-            if (value != null && !value.isBlank()) {
-                return value;
-            }
-        }
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                "The access token is missing an email or username claim");
-    }
 }

@@ -1,5 +1,6 @@
 package com.andesstay.msreservations.config;
 
+import com.andesstay.msreservations.security.RoleUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,11 +22,9 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
-import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Locale;
 
 @Configuration
 @EnableWebSecurity
@@ -60,19 +59,19 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.GET, "/api/reservations/by-unit/**")
-                    .hasAnyRole("ADMIN", "RECEPCIONISTA", "OPERADOR")
+                    .hasAnyRole("ADMIN", "RECEPTIONIST", "AUDIT")
                 .requestMatchers(HttpMethod.GET, "/api/reservations", "/api/reservations/*")
-                    .hasAnyRole("ADMIN", "RECEPCIONISTA", "OPERADOR", "GUEST", "HUESPED")
+                    .hasAnyRole("ADMIN", "RECEPTIONIST", "AUDIT", "GUEST", "GUEST_USER", "HUESPED")
                 .requestMatchers(HttpMethod.POST, "/api/reservations/confirm-payment")
-                    .hasAnyRole("ADMIN", "RECEPCIONISTA", "OPERADOR", "GUEST", "HUESPED")
+                    .hasAnyRole("ADMIN", "RECEPTIONIST", "GUEST", "GUEST_USER", "HUESPED")
                 .requestMatchers(HttpMethod.POST, "/api/reservations/*/pay")
-                    .hasAnyRole("ADMIN", "RECEPCIONISTA", "OPERADOR", "GUEST", "HUESPED")
+                    .hasAnyRole("ADMIN", "RECEPTIONIST", "GUEST", "GUEST_USER", "HUESPED")
                 .requestMatchers(HttpMethod.POST, "/api/reservations")
-                    .hasAnyRole("ADMIN", "RECEPCIONISTA", "OPERADOR", "GUEST", "HUESPED")
+                    .hasAnyRole("ADMIN", "RECEPTIONIST", "GUEST", "GUEST_USER", "HUESPED")
                 .requestMatchers(HttpMethod.PUT, "/api/reservations/*/status")
-                    .hasAnyRole("ADMIN", "RECEPCIONISTA", "OPERADOR")
+                    .hasAnyRole("ADMIN", "RECEPTIONIST")
                 .requestMatchers(HttpMethod.DELETE, "/api/reservations/*")
-                    .hasAnyRole("ADMIN", "RECEPCIONISTA", "OPERADOR")
+                    .hasAnyRole("ADMIN", "RECEPTIONIST")
                 .anyRequest().denyAll())
             .oauth2ResourceServer(oauth -> oauth.jwt(jwt ->
                     jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
@@ -87,19 +86,13 @@ public class SecurityConfig {
             List<String> roles = jwt.getClaimAsStringList("roles");
             if (roles != null) {
                 roles.stream()
-                        .map(SecurityConfig::normalizeRole)
+                        .map(RoleUtils::normalizeRole)
                         .map(role -> (GrantedAuthority) () -> "ROLE_" + role)
                         .forEach(authorities::add);
             }
             return authorities;
         });
         return converter;
-    }
-
-    private static String normalizeRole(String role) {
-        return Normalizer.normalize(role.trim(), Normalizer.Form.NFD)
-                .replaceAll("\\p{M}", "")
-                .toUpperCase(Locale.ROOT);
     }
 
     private static boolean hasRequiredScope(Jwt jwt) {
