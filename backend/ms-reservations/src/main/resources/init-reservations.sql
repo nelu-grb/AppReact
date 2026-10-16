@@ -1,14 +1,17 @@
 -- =====================================================================
 -- ms-reservations | Database Initialization & Seed Data for RESERVATIONS
--- Idempotent: safe to run on every deployment/startup.
+-- Destructive reset: drops and recreates all reservations each time it runs.
 -- =====================================================================
 
--- 1. Create the reservations table with 'id' to match Reservation.java
+-- Drop and recreate the reservations table with 'id' to match Reservation.java.
+DROP TABLE IF EXISTS reservations;
+
 CREATE TABLE IF NOT EXISTS reservations (
     id SERIAL PRIMARY KEY,
     unit_id INT NOT NULL REFERENCES units(unit_id),
     guest_id VARCHAR(255) NOT NULL,
     guest_email VARCHAR(255) NOT NULL,
+    owner_oid VARCHAR(64),
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     total_amount NUMERIC(10, 2) NOT NULL,
@@ -72,3 +75,26 @@ WHERE NOT EXISTS (SELECT 1 FROM RESERVATIONS WHERE UNIT_ID = 10 AND GUEST_ID = '
 INSERT INTO RESERVATIONS (UNIT_ID, GUEST_ID, GUEST_EMAIL, START_DATE, END_DATE, TOTAL_AMOUNT, STATUS, CREATED_AT, UPDATED_AT)
 SELECT 12, 'guest-009', 'tomas.herrera@example.com', DATE '2026-12-26', DATE '2026-12-30', 320000.00, 'CREADA', TIMESTAMP '2026-10-08 09:40:00', TIMESTAMP '2026-10-08 09:40:00'
 WHERE NOT EXISTS (SELECT 1 FROM RESERVATIONS WHERE UNIT_ID = 12 AND GUEST_ID = 'guest-009' AND START_DATE = DATE '2026-12-26');
+
+-- Assign the seeded reservations to the supplied Entra accounts.
+-- This also updates matching rows created by earlier versions of this script.
+WITH seeded_owners (unit_id, guest_id, start_date, owner_oid) AS (
+    VALUES
+        (1,  'guest-001', DATE '2026-09-10', '10dbdec4-c9fc-4381-8415-b49238fa5d3e'),
+        (2,  'guest-008', DATE '2026-09-01', 'cf6e2a4c-0e4a-43be-ba5e-ce74a2077719'),
+        (6,  'guest-006', DATE '2026-08-15', '1e27023b-1d12-443a-b345-40d02397106e'),
+        (4,  'guest-002', DATE '2026-10-05', '10dbdec4-c9fc-4381-8415-b49238fa5d3e'),
+        (3,  'guest-010', DATE '2026-10-06', 'cf6e2a4c-0e4a-43be-ba5e-ce74a2077719'),
+        (9,  'guest-011', DATE '2026-10-04', '1e27023b-1d12-443a-b345-40d02397106e'),
+        (11, 'guest-005', DATE '2026-10-09', '10dbdec4-c9fc-4381-8415-b49238fa5d3e'),
+        (8,  'guest-007', DATE '2026-10-15', 'cf6e2a4c-0e4a-43be-ba5e-ce74a2077719'),
+        (7,  'guest-003', DATE '2026-10-20', '1e27023b-1d12-443a-b345-40d02397106e'),
+        (10, 'guest-004', DATE '2026-11-06', '10dbdec4-c9fc-4381-8415-b49238fa5d3e'),
+        (12, 'guest-009', DATE '2026-12-26', 'cf6e2a4c-0e4a-43be-ba5e-ce74a2077719')
+)
+UPDATE reservations AS r
+SET owner_oid = s.owner_oid
+FROM seeded_owners AS s
+WHERE r.unit_id = s.unit_id
+  AND r.guest_id = s.guest_id
+  AND r.start_date = s.start_date;

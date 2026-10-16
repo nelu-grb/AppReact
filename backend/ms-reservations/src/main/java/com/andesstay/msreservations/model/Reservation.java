@@ -8,7 +8,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "RESERVATIONS")
+@Table(name = "RESERVATIONS", indexes = @Index(name = "idx_reservations_owner_oid", columnList = "OWNER_OID"))
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -27,6 +27,9 @@ public class Reservation {
 
     @Column(name = "GUEST_EMAIL", nullable = false)
     private String guestEmail;
+
+    @Column(name = "OWNER_OID", length = 64)
+    private String ownerOid;
 
     @Column(name = "START_DATE", nullable = false)
     private LocalDate startDate;

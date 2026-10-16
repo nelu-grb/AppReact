@@ -30,7 +30,7 @@ public class UnitController {
                                     @AuthenticationPrincipal Jwt jwt) {
         return catalogWebClient.post()
                 .uri("/api/catalog/units")
-                .header("X-Actor", actorName(jwt))
+                .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(UnitResponse.class);
@@ -38,6 +38,7 @@ public class UnitController {
 
     @GetMapping
     public Mono<List<UnitResponse>> listAll(
+            @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) UnitType type,
             @RequestParam(required = false) Boolean availability) {
         return catalogWebClient.get()
@@ -47,14 +48,17 @@ public class UnitController {
                     if (availability != null) builder.queryParam("availability", availability);
                     return builder.build();
                 })
+                .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<List<UnitResponse>>() {});
     }
 
     @GetMapping("/{id}")
-    public Mono<UnitResponse> getById(@PathVariable Long id) {
+    public Mono<UnitResponse> getById(@PathVariable Long id,
+                                      @AuthenticationPrincipal Jwt jwt) {
         return catalogWebClient.get()
                 .uri("/api/catalog/units/{id}", id)
+                .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                 .retrieve()
                 .bodyToMono(UnitResponse.class);
     }
@@ -65,7 +69,7 @@ public class UnitController {
                                     @AuthenticationPrincipal Jwt jwt) {
         return catalogWebClient.put()
                 .uri("/api/catalog/units/{id}", id)
-                .header("X-Actor", actorName(jwt))
+                .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(UnitResponse.class);
@@ -76,27 +80,15 @@ public class UnitController {
                             @AuthenticationPrincipal Jwt jwt) {
         return catalogWebClient.delete()
                 .uri("/api/catalog/units/{id}", id)
-                .header("X-Actor", actorName(jwt))
+                .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                 .retrieve()
                 .bodyToMono(Void.class);
-    }
-
-    private String actorName(Jwt jwt) {
-        if (jwt == null) return "ANONYMOUS";
-
-        String preferredUsername = jwt.getClaimAsString("preferred_username");
-        if (preferredUsername != null && !preferredUsername.isBlank()) return preferredUsername;
-
-        String uniqueName = jwt.getClaimAsString("unique_name");
-        if (uniqueName != null && !uniqueName.isBlank()) return uniqueName;
-
-        String name = jwt.getClaimAsString("name");
-        return name != null && !name.isBlank() ? name : jwt.getSubject();
     }
 
     @GetMapping("/{id}/availability")
     public Mono<AvailabilityResponse> checkAvailability(
             @PathVariable Long id,
+            @AuthenticationPrincipal Jwt jwt,
             @RequestParam LocalDate from,
             @RequestParam LocalDate to) {
         return catalogWebClient.get()
@@ -105,6 +97,7 @@ public class UnitController {
                         .queryParam("from", from)
                         .queryParam("to", to)
                         .build(id))
+                .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                 .retrieve()
                 .bodyToMono(AvailabilityResponse.class);
     }

@@ -12,6 +12,7 @@ import com.andesstay.msreservations.repository.ReservationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -37,10 +38,11 @@ public class ReservationService {
     private boolean emailNotificationsEnabled;
 
     @Transactional
-    public ReservationResponse createReservation(ReservationRequest request, String currentUser) {
-        unitValidationService.validateUnitAvailability(request.getUnitId(), request.getStartDate(), request.getEndDate());
+    public ReservationResponse createReservation(ReservationRequest request, String currentUser, Jwt jwt) {
+        unitValidationService.validateUnitAvailability(
+                request.getUnitId(), request.getStartDate(), request.getEndDate(), jwt);
 
-        UnitDto unit = unitValidationService.getUnit(request.getUnitId());
+        UnitDto unit = unitValidationService.getUnit(request.getUnitId(), jwt);
         if (unit == null || unit.getPricePerNight() == null || unit.getPricePerNight().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("No se pudo obtener el precio por noche de la unidad");
         }
@@ -56,6 +58,7 @@ public class ReservationService {
                 .unitId(request.getUnitId())
                 .guestId(request.getGuestId())
                 .guestEmail(request.getGuestEmail())
+                .ownerOid(request.getOwnerOid())
                 .startDate(request.getStartDate())
                 .endDate(request.getEndDate())
                 .totalAmount(totalAmount)
@@ -84,8 +87,21 @@ public class ReservationService {
         return mapToResponse(reservation);
     }
 
+    public ReservationResponse getReservationByIdForOwner(Long id, String ownerOid) {
+        Reservation reservation = reservationRepository.findByIdAndOwnerOid(id, ownerOid)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reserva no encontrada"));
+        return mapToResponse(reservation);
+    }
+
     public List<ReservationResponse> getReservations(ReservationStatus status, LocalDate from, LocalDate to) {
         return reservationRepository.findByFilters(status, from, to).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<ReservationResponse> getReservationsForOwner(
+            String ownerOid, ReservationStatus status, LocalDate from, LocalDate to) {
+        return reservationRepository.findByOwnerOidAndFilters(ownerOid, status, from, to).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }

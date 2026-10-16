@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ReservationRepository extends JpaRepository<Reservation, Long> {
@@ -23,6 +24,20 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             @Param("fromDate") LocalDate fromDate,
             @Param("toDate") LocalDate toDate
     );
+
+    @Query("SELECT r FROM Reservation r WHERE r.ownerOid = :ownerOid AND " +
+           "(:status IS NULL OR r.status = :status) AND " +
+           "(:fromDate IS NULL OR r.startDate >= :fromDate) AND " +
+           "(:toDate IS NULL OR r.endDate <= :toDate) " +
+           "ORDER BY r.createdAt DESC, r.id DESC")
+    List<Reservation> findByOwnerOidAndFilters(
+            @Param("ownerOid") String ownerOid,
+            @Param("status") ReservationStatus status,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate
+    );
+
+    Optional<Reservation> findByIdAndOwnerOid(Long id, String ownerOid);
 
     @Query("SELECT r FROM Reservation r WHERE r.unitId = :unitId")
     List<Reservation> findByUnitId(@Param("unitId") Long unitId);

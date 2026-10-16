@@ -5,6 +5,7 @@ import com.andesstay.msreservations.dto.UnitDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -26,9 +27,9 @@ public class UnitValidationService {
      * @param endDate reservation end date
      * @throws IllegalArgumentException if unit doesn't exist or is not available
      */
-    public void validateUnitAvailability(Long unitId, LocalDate startDate, LocalDate endDate) {
+    public void validateUnitAvailability(Long unitId, LocalDate startDate, LocalDate endDate, Jwt jwt) {
         // First, verify the unit exists
-        UnitDto unit = getUnit(unitId);
+        UnitDto unit = getUnit(unitId, jwt);
         if (unit == null) {
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
@@ -36,7 +37,7 @@ public class UnitValidationService {
             );
         }
 
-        AvailabilityDto availability = checkAvailability(unitId, startDate, endDate);
+        AvailabilityDto availability = checkAvailability(unitId, startDate, endDate, jwt);
         if (!availability.getAvailable()) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -47,23 +48,26 @@ public class UnitValidationService {
         log.info("Unit {} is available for reservation from {} to {}", unitId, startDate, endDate);
     }
 
-    public UnitDto getUnit(Long unitId) {
+    public UnitDto getUnit(Long unitId, Jwt jwt) {
         try {
             return catalogWebClient.get()
                     .uri("/api/catalog/units/{id}", unitId)
+                    .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                     .retrieve()
                     .bodyToMono(UnitDto.class)
                     .block();
         } catch (WebClientResponseException.NotFound e) {
             log.warn("Unit {} not found in catalog", unitId);
             return null;
+        } catch (WebClientResponseException e) {
+            throw new ResponseStatusException(e.getStatusCode(), "Catalog service rejected the request", e);
         } catch (Exception e) {
             log.error("Error fetching unit {} from catalog", unitId, e);
             throw new RuntimeException("Error validating unit with catalog service", e);
         }
     }
 
-    private AvailabilityDto checkAvailability(Long unitId, LocalDate startDate, LocalDate endDate) {
+    private AvailabilityDto checkAvailability(Long unitId, LocalDate startDate, LocalDate endDate, Jwt jwt) {
         try {
             return catalogWebClient.get()
                     .uri(uriBuilder -> uriBuilder
@@ -71,9 +75,12 @@ public class UnitValidationService {
                             .queryParam("from", startDate)
                             .queryParam("to", endDate)
                             .build(unitId))
+                    .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                     .retrieve()
                     .bodyToMono(AvailabilityDto.class)
                     .block();
+        } catch (WebClientResponseException e) {
+            throw new ResponseStatusException(e.getStatusCode(), "Catalog service rejected the availability request", e);
         } catch (Exception e) {
             log.error("Error checking availability for unit {} from catalog", unitId, e);
             throw new RuntimeException("Error checking unit availability with catalog service", e);

@@ -20,6 +20,8 @@ public class ReservationRequest {
     @NotBlank(message = "El email del huésped es obligatorio")
     private String guestEmail;
 
+    private String ownerOid;
+
     @NotNull(message = "La fecha de inicio es obligatoria")
     private LocalDate startDate;
 
