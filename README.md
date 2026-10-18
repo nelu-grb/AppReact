@@ -227,7 +227,16 @@ La topología mantiene tres colas principales durables e independientes: `q.hous
 | `cmd.dead.dlx` | direct | `q.voucher.dlq` | `q.voucher.dlq` | Mensajes fallidos de voucher. |
 | `cmd.dead.dlx` | direct | `q.email.dlq` | `q.email.dlq` | Mensajes fallidos de email. |
 
-Cada cola principal declara el dead-letter exchange `cmd.dead.dlx` y su routing key `.dlq`. Los nombres de exchanges, colas, DLQ y routing keys están externalizados bajo `app.rabbitmq.*` en los `application.properties` de `ms-reservations` y `msnofity`; los beans `Queue`, `Exchange` y `Binding` permanecen en las clases `@Configuration`, fuera de productores/consumidores. Ambos servicios comparten los mismos valores para declarar una topología compatible.
+Cada cola principal declara el dead-letter exchange `cmd.dead.dlx` y su routing key `.dlq`. Los nombres, límites y expiración están externalizados bajo `app.rabbitmq.*` en los `application.properties` de `ms-reservations` y `msnofity`; los beans `Queue`, `Exchange` y `Binding` permanecen en las clases `@Configuration`, fuera de productores/consumidores. Ambos servicios comparten los mismos valores para declarar una topología compatible.
+
+Las políticas de retención son:
+
+| Tipo de cola | Máximo de mensajes | Expiración por mensaje | Al alcanzar el límite |
+| --- | ---: | ---: | --- |
+| Colas principales | 10 000 | 24 horas | El mensaje excedente se deriva a la DLQ de su dominio (`reject-publish-dlx`). |
+| DLQ | 10 000 | 30 días | Se conserva como máximo la cantidad indicada; si la DLQ alcanza el límite, RabbitMQ descarta los mensajes más antiguos. |
+
+Los valores se configuran con `app.rabbitmq.queue.max-length`, `app.rabbitmq.queue.message-ttl-ms`, `app.rabbitmq.queue.overflow`, `app.rabbitmq.queue.dlq.max-length` y `app.rabbitmq.queue.dlq.message-ttl-ms`. Los mensajes que expiran en una cola principal también se derivan a su DLQ, donde el listener los registra y confirma; un mensaje de DLQ que cumpla 30 días se elimina automáticamente.
 
 Los consumidores usan ACK manual: confirman después del procesamiento y hacen NACK sin requeue si el error es permanente. Errores de red, timeout y respuestas HTTP `429`/`5xx` se reintentan hasta tres intentos en total, con espera exponencial de `250 ms` y máximo `2000 ms`; JSON malformado, payload inválido y errores HTTP `4xx` van directamente a la DLQ. Los valores están en `app.rabbitmq.listener.retry.*` del `application.properties` de `msnofity`. El listener común de DLQ registra cola, routing key, `x-death` y cuerpo del mensaje y luego ACK, para evitar un ciclo de requeue.
 
@@ -314,9 +323,10 @@ RabbitMQ se ejecuta como un clúster Docker Compose de dos nodos. El primer nodo
 | Puerto AMQP | `5672`, `5673` (host); `5672` en la red Docker | `5672` |
 | Usuario | `RABBITMQ_USER` (por defecto `andesstay`) | `guest` |
 | Contraseña | `RABBITMQ_PASSWORD` | `guest` |
+| Envío de email desde reservas | `NOTIFICATIONS_EMAIL_ENABLED` (`true` para habilitar) | `false` |
 | Consolas de administración | `http://localhost:15672`, `http://localhost:15673` | No aplica |
 
-Antes de iniciar los contenedores, define en tu `.env` local (no lo publiques) `RABBITMQ_USER`, una contraseña fuerte `RABBITMQ_PASSWORD` y una cookie compartida `RABBITMQ_ERLANG_COOKIE` para ambos nodos. Puedes mantener las variables Kafka/Resend que ya usa el proyecto. La cookie debe ser igual en ambos nodos y mantenerse estable entre reinicios para conservar el clúster.
+Antes de iniciar los contenedores, define en tu `.env` local (no lo publiques) `RABBITMQ_USER`, una contraseña fuerte `RABBITMQ_PASSWORD` y una cookie compartida `RABBITMQ_ERLANG_COOKIE` para ambos nodos. Para enviar correos al confirmar reservas, configura además `NOTIFICATIONS_EMAIL_ENABLED=true`, `RESEND_API_KEY` y `RESEND_FROM_EMAIL`; el envío permanece desactivado por defecto para evitar fallos de correo si el proveedor no está configurado. Puedes mantener las variables Kafka/Resend que ya usa el proyecto. La cookie debe ser igual en ambos nodos y mantenerse estable entre reinicios para conservar el clúster.
 
 En AWS EC2, autoriza AMQP (`5672` y, si clientes externos se conectarán directamente al segundo nodo, `5673`) solo desde las IP/redes de clientes que correspondan. Restringe las consolas `15672`/`15673` al acceso administrativo de confianza. La comunicación de clúster debe permanecer en la red privada entre nodos; no expongas puertos de distribución/epmd públicamente.
 
@@ -338,6 +348,8 @@ docker compose up -d --build
 
 En Docker, `ms-reservations` y `msnofity` intentan conectarse a ambos nodos (`rabbit1:5672,rabbit2:5672`). Ejecutando los servicios fuera de Docker, la conexión local predeterminada usa `localhost:5672`.
 
+Las colas que ya existían antes de esta política se declararon sin estos argumentos. RabbitMQ no permite cambiar algunos argumentos de una cola existente con una nueva declaración: si al actualizar aparece `PRECONDITION_FAILED` por argumentos inequivalentes, detén productores y consumidores, confirma que no haya mensajes pendientes que necesites, y elimina/recrea únicamente las seis colas RabbitMQ para que los servicios las declaren con la nueva política. **Eliminar una cola borra sus mensajes**; no lo hagas si necesitas conservarlos.
+
 ### Verificación y diagnóstico
 
 1. Consultar `docker compose -f docker-compose.messaging.yml exec rabbit1 rabbitmqctl cluster_status` y confirmar que aparecen `rabbit@rabbit1` y `rabbit@rabbit2`.
@@ -345,7 +357,8 @@ En Docker, `ms-reservations` y `msnofity` intentan conectarse a ambos nodos (`ra
 3. Crear una reserva y comprobar que `ms-reservations` registra la publicación solo si corresponde al estado/configuración.
 4. Confirmar una reserva y revisar los logs de `msnofity` para los comandos housekeeping/voucher y el evento de auditoría.
 5. Si el email está habilitado, configurar `RESEND_API_KEY` y `RESEND_FROM_EMAIL`; sin esas variables el consumo del email puede fallar.
-6. Consultar los logs de `msnofity` para verificar que los consumidores registran mensajes de las DLQ y los confirman después del log.
+6. Consultar los logs de `msnofity` para verificar que los consumidores registran mensajes de las DLQ y los confirman después del log. Como el listener las consume enseguida, es normal que la interfaz no muestre mensajes pendientes en ellas.
+7. En RabbitMQ Management, revisar cada cola y sus argumentos `x-max-length`, `x-message-ttl` y, para las colas principales, `x-dead-letter-*` y `x-overflow`.
 
 ### Pruebas RabbitMQ
 

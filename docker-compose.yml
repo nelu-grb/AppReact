@@ -58,7 +58,7 @@ services:
       SPRING_RABBITMQ_ADDRESSES: ${RABBITMQ_ADDRESSES:-rabbit1:5672,rabbit2:5672}
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-andesstay}
       SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD in .env}
-      NOTIFICATIONS_EMAIL_ENABLED: "false"
+      NOTIFICATIONS_EMAIL_ENABLED: "${NOTIFICATIONS_EMAIL_ENABLED:-false}"
       DOWNSTREAM_CATALOG_BASE_URL: http://ms-catalog:8082    
     depends_on:
       postgres-db:
@@ -121,7 +121,7 @@ services:
       RABBITMQ_ADDRESSES: ${RABBITMQ_ADDRESSES:-rabbit1:5672,rabbit2:5672}
       RABBITMQ_USER: ${RABBITMQ_USER:-andesstay}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD in .env}
-      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
       RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-onboarding@resend.dev}
     depends_on:
       ms-reservations:

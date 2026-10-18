@@ -52,6 +52,21 @@ public class RabbitMQConfig {
     @Value("${app.rabbitmq.routing.notifications.binding}")
     private String notificationsBindingKey;
 
+    @Value("${app.rabbitmq.queue.max-length:10000}")
+    private int queueMaxLength;
+
+    @Value("${app.rabbitmq.queue.message-ttl-ms:86400000}")
+    private long queueMessageTtlMs;
+
+    @Value("${app.rabbitmq.queue.overflow:reject-publish-dlx}")
+    private String queueOverflow;
+
+    @Value("${app.rabbitmq.queue.dlq.max-length:10000}")
+    private int deadLetterQueueMaxLength;
+
+    @Value("${app.rabbitmq.queue.dlq.message-ttl-ms:2592000000}")
+    private long deadLetterQueueMessageTtlMs;
+
     @Bean
     public DirectExchange directExchange() {
         return new DirectExchange(directExchangeName, true, false);
@@ -69,41 +84,32 @@ public class RabbitMQConfig {
 
     @Bean
     public Queue housekeepingQueue() {
-        return QueueBuilder.durable(housekeepingQueueName)
-                .withArgument("x-dead-letter-exchange", deadLetterExchangeName)
-                .withArgument("x-dead-letter-routing-key", housekeepingDeadLetterQueueName)
-                .build();
+        return durableWorkQueue(housekeepingQueueName, housekeepingDeadLetterQueueName);
     }
 
     @Bean
     public Queue voucherQueue() {
-        return QueueBuilder.durable(voucherQueueName)
-                .withArgument("x-dead-letter-exchange", deadLetterExchangeName)
-                .withArgument("x-dead-letter-routing-key", voucherDeadLetterQueueName)
-                .build();
+        return durableWorkQueue(voucherQueueName, voucherDeadLetterQueueName);
     }
 
     @Bean
     public Queue emailQueue() {
-        return QueueBuilder.durable(emailQueueName)
-                .withArgument("x-dead-letter-exchange", deadLetterExchangeName)
-                .withArgument("x-dead-letter-routing-key", emailDeadLetterQueueName)
-                .build();
+        return durableWorkQueue(emailQueueName, emailDeadLetterQueueName);
     }
 
     @Bean
     public Queue housekeepingDeadLetterQueue() {
-        return QueueBuilder.durable(housekeepingDeadLetterQueueName).build();
+        return durableDeadLetterQueue(housekeepingDeadLetterQueueName);
     }
 
     @Bean
     public Queue voucherDeadLetterQueue() {
-        return QueueBuilder.durable(voucherDeadLetterQueueName).build();
+        return durableDeadLetterQueue(voucherDeadLetterQueueName);
     }
 
     @Bean
     public Queue emailDeadLetterQueue() {
-        return QueueBuilder.durable(emailDeadLetterQueueName).build();
+        return durableDeadLetterQueue(emailDeadLetterQueueName);
     }
 
     @Bean
@@ -146,5 +152,34 @@ public class RabbitMQConfig {
     @Bean
     public MessageConverter jsonMessageConverter() {
         return new Jackson2JsonMessageConverter();
+    }
+
+    private Queue durableWorkQueue(String queueName, String deadLetterQueueName) {
+        validateQueuePolicies();
+        return QueueBuilder.durable(queueName)
+                .withArgument("x-max-length", queueMaxLength)
+                .withArgument("x-message-ttl", queueMessageTtlMs)
+                .withArgument("x-overflow", queueOverflow)
+                .withArgument("x-dead-letter-exchange", deadLetterExchangeName)
+                .withArgument("x-dead-letter-routing-key", deadLetterQueueName)
+                .build();
+    }
+
+    private Queue durableDeadLetterQueue(String queueName) {
+        validateQueuePolicies();
+        return QueueBuilder.durable(queueName)
+                .withArgument("x-max-length", deadLetterQueueMaxLength)
+                .withArgument("x-message-ttl", deadLetterQueueMessageTtlMs)
+                .build();
+    }
+
+    private void validateQueuePolicies() {
+        if (queueMaxLength < 1
+                || queueMessageTtlMs < 1
+                || deadLetterQueueMaxLength < 1
+                || deadLetterQueueMessageTtlMs < 1
+                || !"reject-publish-dlx".equals(queueOverflow)) {
+            throw new IllegalStateException("La configuración de retención de colas RabbitMQ es inválida");
+        }
     }
 }
