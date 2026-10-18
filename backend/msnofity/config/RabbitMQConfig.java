@@ -1,150 +1,143 @@
 package com.react.backend.msnofity.config;
 
-import org.springframework.amqp.core.*;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.amqp.core.Binding;
+import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.DirectExchange;
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.amqp.core.TopicExchange;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class RabbitMQConfig {
 
-    public static final String EXCHANGE_DIRECT = "cmd.direct";
-    public static final String EXCHANGE_DLX = "cmd.dead.dlx";
-    public static final String EVT_EXCHANGE = "evt.fanout";
-    public static final String EVT_NOTIFY_QUEUE = "q.evt.notify";
+    @Value("${app.rabbitmq.exchange.direct}")
+    private String directExchangeName;
 
-    @Value("${app.rabbitmq.queue.email}")
-    private String emailQueue;
+    @Value("${app.rabbitmq.exchange.topic}")
+    private String topicExchangeName;
+
+    @Value("${app.rabbitmq.exchange.dlx}")
+    private String deadLetterExchangeName;
 
     @Value("${app.rabbitmq.queue.housekeeping}")
-    private String housekeepingQueue;
+    private String housekeepingQueueName;
 
     @Value("${app.rabbitmq.queue.voucher}")
-    private String voucherQueue;
+    private String voucherQueueName;
 
-    private String emailDeadLetterQueueName() {
-        return emailQueue + ".dlq";
-    }
+    @Value("${app.rabbitmq.queue.email}")
+    private String emailQueueName;
 
-    private String housekeepingDeadLetterQueueName() {
-        return housekeepingQueue + ".dlq";
-    }
+    @Value("${app.rabbitmq.queue.housekeeping.dlq}")
+    private String housekeepingDeadLetterQueueName;
 
-    private String voucherDeadLetterQueueName() {
-        return voucherQueue + ".dlq";
-    }
+    @Value("${app.rabbitmq.queue.voucher.dlq}")
+    private String voucherDeadLetterQueueName;
 
-    // Direct Exchange y DLX durables
+    @Value("${app.rabbitmq.queue.email.dlq}")
+    private String emailDeadLetterQueueName;
+
+    @Value("${app.rabbitmq.routing.commands.housekeeping}")
+    private String housekeepingRoutingKey;
+
+    @Value("${app.rabbitmq.routing.commands.voucher}")
+    private String voucherRoutingKey;
+
+    @Value("${app.rabbitmq.routing.notifications.binding}")
+    private String notificationsBindingKey;
+
     @Bean
     public DirectExchange directExchange() {
-        return new DirectExchange(EXCHANGE_DIRECT, true, false);
+        return new DirectExchange(directExchangeName, true, false);
+    }
+
+    @Bean
+    public TopicExchange topicExchange() {
+        return new TopicExchange(topicExchangeName, true, false);
     }
 
     @Bean
     public DirectExchange deadLetterExchange() {
-        return new DirectExchange(EXCHANGE_DLX, true, false);
-    }
-
-    // Exchange Fanout para Pub/Sub (debe coincidir con ms-reservations)
-    @Bean
-    public FanoutExchange evtExchange() {
-        return new FanoutExchange(EVT_EXCHANGE, true, false);
-    }
-
-    // Cola durable fija para recibir eventos Pub/Sub (persiste si msnofity está caído)
-    @Bean
-    public Queue evtNotifyQueue() {
-        return QueueBuilder.durable(EVT_NOTIFY_QUEUE).build();
-    }
-
-    @Bean
-    public Binding evtNotifyBinding(FanoutExchange evtExchange, Queue evtNotifyQueue) {
-        return BindingBuilder.bind(evtNotifyQueue).to(evtExchange);
-    }
-
-    // Cola TEMPORAL para monitoreo (se crea al iniciar y se borra al desconectarse)
-    @Bean
-    public Queue evtMonitorQueue() {
-        return new AnonymousQueue();
-    }
-
-    @Bean
-    public Binding evtMonitorBinding(FanoutExchange evtExchange, Queue evtMonitorQueue) {
-        return BindingBuilder.bind(evtMonitorQueue).to(evtExchange);
-    }
-
-    // Definición de Colas de Comandos
-    @Bean
-    public Queue emailQueue() {
-        return QueueBuilder.durable(emailQueue)
-            .withArgument("x-dead-letter-exchange", EXCHANGE_DLX)
-            .withArgument("x-dead-letter-routing-key", emailDeadLetterQueueName())
-            .build();
+        return new DirectExchange(deadLetterExchangeName, true, false);
     }
 
     @Bean
     public Queue housekeepingQueue() {
-        return QueueBuilder.durable(housekeepingQueue)
-            .withArgument("x-dead-letter-exchange", EXCHANGE_DLX)
-            .withArgument("x-dead-letter-routing-key", housekeepingDeadLetterQueueName())
-            .build();
+        return QueueBuilder.durable(housekeepingQueueName)
+                .withArgument("x-dead-letter-exchange", deadLetterExchangeName)
+                .withArgument("x-dead-letter-routing-key", housekeepingDeadLetterQueueName)
+                .build();
     }
 
     @Bean
     public Queue voucherQueue() {
-        return QueueBuilder.durable(voucherQueue)
-            .withArgument("x-dead-letter-exchange", EXCHANGE_DLX)
-            .withArgument("x-dead-letter-routing-key", voucherDeadLetterQueueName())
-            .build();
+        return QueueBuilder.durable(voucherQueueName)
+                .withArgument("x-dead-letter-exchange", deadLetterExchangeName)
+                .withArgument("x-dead-letter-routing-key", voucherDeadLetterQueueName)
+                .build();
     }
 
     @Bean
-    public Queue emailDeadLetterQueue() {
-        return QueueBuilder.durable(emailDeadLetterQueueName()).build();
+    public Queue emailQueue() {
+        return QueueBuilder.durable(emailQueueName)
+                .withArgument("x-dead-letter-exchange", deadLetterExchangeName)
+                .withArgument("x-dead-letter-routing-key", emailDeadLetterQueueName)
+                .build();
     }
 
     @Bean
     public Queue housekeepingDeadLetterQueue() {
-        return QueueBuilder.durable(housekeepingDeadLetterQueueName()).build();
+        return QueueBuilder.durable(housekeepingDeadLetterQueueName).build();
     }
 
     @Bean
     public Queue voucherDeadLetterQueue() {
-        return QueueBuilder.durable(voucherDeadLetterQueueName()).build();
-    }
-
-    // Bindings
-    @Bean
-    public Binding bindingEmail(@Qualifier("emailQueue") Queue emailQueue, DirectExchange directExchange) {
-        return BindingBuilder.bind(emailQueue).to(directExchange).with("email.send");
+        return QueueBuilder.durable(voucherDeadLetterQueueName).build();
     }
 
     @Bean
-    public Binding bindingHousekeeping(@Qualifier("housekeepingQueue") Queue housekeepingQueue, DirectExchange directExchange) {
-        return BindingBuilder.bind(housekeepingQueue).to(directExchange).with("housekeeping.ticket");
+    public Queue emailDeadLetterQueue() {
+        return QueueBuilder.durable(emailDeadLetterQueueName).build();
     }
 
     @Bean
-    public Binding bindingVoucher(@Qualifier("voucherQueue") Queue voucherQueue, DirectExchange directExchange) {
-        return BindingBuilder.bind(voucherQueue).to(directExchange).with("voucher.gen");
+    public Binding bindingHousekeeping(@Qualifier("housekeepingQueue") Queue queue,
+                                       @Qualifier("directExchange") DirectExchange exchange) {
+        return BindingBuilder.bind(queue).to(exchange).with(housekeepingRoutingKey);
     }
 
     @Bean
-    public Binding bindingEmailDeadLetter(@Qualifier("emailDeadLetterQueue") Queue emailDeadLetterQueue,
-                                          @Qualifier("deadLetterExchange") DirectExchange deadLetterExchange) {
-        return BindingBuilder.bind(emailDeadLetterQueue).to(deadLetterExchange).with(emailDeadLetterQueueName());
+    public Binding bindingVoucher(@Qualifier("voucherQueue") Queue queue,
+                                  @Qualifier("directExchange") DirectExchange exchange) {
+        return BindingBuilder.bind(queue).to(exchange).with(voucherRoutingKey);
     }
 
     @Bean
-    public Binding bindingHousekeepingDeadLetter(@Qualifier("housekeepingDeadLetterQueue") Queue housekeepingDeadLetterQueue,
-                                                 @Qualifier("deadLetterExchange") DirectExchange deadLetterExchange) {
-        return BindingBuilder.bind(housekeepingDeadLetterQueue).to(deadLetterExchange).with(housekeepingDeadLetterQueueName());
+    public Binding bindingEmail(@Qualifier("emailQueue") Queue queue,
+                                TopicExchange topicExchange) {
+        return BindingBuilder.bind(queue).to(topicExchange).with(notificationsBindingKey);
     }
 
     @Bean
-    public Binding bindingVoucherDeadLetter(@Qualifier("voucherDeadLetterQueue") Queue voucherDeadLetterQueue,
-                                            @Qualifier("deadLetterExchange") DirectExchange deadLetterExchange) {
-        return BindingBuilder.bind(voucherDeadLetterQueue).to(deadLetterExchange).with(voucherDeadLetterQueueName());
+    public Binding bindingHousekeepingDeadLetter(
+            @Qualifier("housekeepingDeadLetterQueue") Queue queue,
+            @Qualifier("deadLetterExchange") DirectExchange exchange) {
+        return BindingBuilder.bind(queue).to(exchange).with(housekeepingDeadLetterQueueName);
+    }
+
+    @Bean
+    public Binding bindingVoucherDeadLetter(@Qualifier("voucherDeadLetterQueue") Queue queue,
+                                            @Qualifier("deadLetterExchange") DirectExchange exchange) {
+        return BindingBuilder.bind(queue).to(exchange).with(voucherDeadLetterQueueName);
+    }
+
+    @Bean
+    public Binding bindingEmailDeadLetter(@Qualifier("emailDeadLetterQueue") Queue queue,
+                                          @Qualifier("deadLetterExchange") DirectExchange exchange) {
+        return BindingBuilder.bind(queue).to(exchange).with(emailDeadLetterQueueName);
     }
 }

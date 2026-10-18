@@ -41,7 +41,7 @@ flowchart LR
 | `msreport` | `8085` | Consume eventos de reservas desde Kafka, los persiste y calcula KPIs. |
 | PostgreSQL | `5433` externo / `5432` Docker | Base de datos compartida `andesstay_db`. |
 | Kafka | `9092` externo / `29092` Docker | Event streaming para reservas, catálogo y auditoría. |
-| RabbitMQ | `5672` | Mensajería de comandos; la consola de administración está en `15672`. |
+| RabbitMQ | `5672` y `5673` | Clúster Compose de dos nodos; consolas en `15672` y `15673`. |
 
 Todos los servicios Java usan Maven y Spring Boot. Los Dockerfiles usan Eclipse Temurin 21 para ejecutar las aplicaciones.
 
@@ -214,20 +214,22 @@ En este proyecto RabbitMQ no reemplaza a Kafka:
 - **Binding**: relación entre un exchange, una cola y una routing key.
 - **DLX/DLQ**: dead-letter exchange y dead-letter queue; reciben mensajes que no pudieron procesarse.
 
-### Topología real
+### Topología RabbitMQ
 
-El exchange principal es de tipo `direct`: la routing key debe coincidir exactamente con el binding de la cola. Las colas son durables, por lo que RabbitMQ conserva su definición y los mensajes pendientes ante un reinicio del broker, según las propiedades de entrega del mensaje.
+La topología mantiene tres colas principales durables e independientes: `q.housekeeper`, `q.voucher` y `q.email`, cada una con su propia DLQ. Housekeeping y voucher se enrutan mediante un exchange direct; email usa un exchange topic. Los eventos de auditoría de reservas se mantienen en Kafka y no ocupan una cuarta cola RabbitMQ.
 
-| Exchange | Cola principal | Routing key | Consumidor | Acción |
+| Exchange | Tipo | Cola | Binding/routing key | Acción |
 | --- | --- | --- | --- | --- |
-| `cmd.direct` | `q.cmd.email` | `email.send` | `msnofity` | Enviar email al huésped. |
-| `cmd.direct` | `q.cmd.housekeeping` | `housekeeping.ticket` | `msnofity` | Crear ticket de preparación de habitación. |
-| `cmd.direct` | `q.cmd.voucher` | `voucher.gen` | `msnofity` | Generar voucher de reserva. |
-| `cmd.dead.dlx` | `q.cmd.email.dlq` | `q.cmd.email.dlq` | Sin consumidor de negocio | Mensajes fallidos de email. |
-| `cmd.dead.dlx` | `q.cmd.housekeeping.dlq` | `q.cmd.housekeeping.dlq` | Sin consumidor de negocio | Mensajes fallidos de housekeeping. |
-| `cmd.dead.dlx` | `q.cmd.voucher.dlq` | `q.cmd.voucher.dlq` | Sin consumidor de negocio | Mensajes fallidos de vouchers. |
+| `cmd.direct` | direct | `q.housekeeper` | `housekeeping.ticket` | Procesar housekeeping. |
+| `cmd.direct` | direct | `q.voucher` | `voucher.gen` | Generar voucher. |
+| `evt.topic` | topic | `q.email` | `notification.#` (productor: `notification.email`) | Enviar notificaciones por email. |
+| `cmd.dead.dlx` | direct | `q.housekeeper.dlq` | `q.housekeeper.dlq` | Mensajes fallidos de housekeeping. |
+| `cmd.dead.dlx` | direct | `q.voucher.dlq` | `q.voucher.dlq` | Mensajes fallidos de voucher. |
+| `cmd.dead.dlx` | direct | `q.email.dlq` | `q.email.dlq` | Mensajes fallidos de email. |
 
-Las colas principales tienen los argumentos `x-dead-letter-exchange=cmd.dead.dlx` y una routing key de dead letter con el sufijo `.dlq`. La topología se declara en `ms-reservations` y también en `msnofity`, lo que permite que cualquiera de los dos servicios declare los recursos al arrancar. Las definiciones deben mantenerse compatibles.
+Cada cola principal declara el dead-letter exchange `cmd.dead.dlx` y su routing key `.dlq`. Los nombres de exchanges, colas, DLQ y routing keys están externalizados bajo `app.rabbitmq.*` en los `application.properties` de `ms-reservations` y `msnofity`; los beans `Queue`, `Exchange` y `Binding` permanecen en las clases `@Configuration`, fuera de productores/consumidores. Ambos servicios comparten los mismos valores para declarar una topología compatible.
+
+Los consumidores usan ACK manual: confirman después del procesamiento y hacen NACK sin requeue si el error es permanente. Errores de red, timeout y respuestas HTTP `429`/`5xx` se reintentan hasta tres intentos en total, con espera exponencial de `250 ms` y máximo `2000 ms`; JSON malformado, payload inválido y errores HTTP `4xx` van directamente a la DLQ. Los valores están en `app.rabbitmq.listener.retry.*` del `application.properties` de `msnofity`. El listener común de DLQ registra cola, routing key, `x-death` y cuerpo del mensaje y luego ACK, para evitar un ciclo de requeue.
 
 Aunque `ms-catalog` incluye `spring-boot-starter-amqp` y configuración de conexión, no tiene un productor, consumidor ni una configuración de colas RabbitMQ activa en el código actual. Por tanto, su relación actual con RabbitMQ es solo preparatoria.
 
@@ -248,11 +250,12 @@ La siguiente trazabilidad muestra qué método participa en cada etapa y dónde 
 | 9. Comando de email | Si las notificaciones están habilitadas, se publica `EMAIL_SEND` con `email`, `subject` y `body`. | `publishEmailCommand(...)` en [RabbitMQPublisher.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/messaging/RabbitMQPublisher.java) |
 | 10. Comando de housekeeping | Se publica `HOUSEKEEPING_TICKET` con `unitId` y `detail`, usando la routing key `housekeeping.ticket`. | `publishHousekeepingTicket(...)` en [RabbitMQPublisher.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/messaging/RabbitMQPublisher.java) |
 | 11. Comando de voucher | Se publica `VOUCHER_GEN` con `reservationId`, `customerEmail`, `voucherCode` y `amount`, usando `voucher.gen`. | `publishVoucherGenCommand(...)` en [RabbitMQPublisher.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/messaging/RabbitMQPublisher.java) |
-| 12. Enrutamiento RabbitMQ | `RabbitTemplate.convertAndSend()` envía el envoltorio JSON a `cmd.direct`; los bindings relacionan cada routing key con su cola. | `convertAndSend(...)` en [RabbitMQPublisher.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/messaging/RabbitMQPublisher.java) y bindings en [RabbitMQConfig.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/config/RabbitMQConfig.java) |
-| 13. Consumo de email | `msnofity` escucha `q.cmd.email`, extrae `payload` y llama a Resend para enviar el correo. | `processEmail(...)` en [NotificationListener.java](backend/msnofity/listener/NotificationListener.java), que llama a `sendEmail(...)` en [NotificationService.java](backend/msnofity/service/NotificationService.java) |
-| 14. Consumo de housekeeping | `msnofity` escucha `q.cmd.housekeeping`, transforma el payload y registra el ticket. | `processHousekeeping(...)` en [NotificationListener.java](backend/msnofity/listener/NotificationListener.java), que llama a `createTicket(...)` en [HousekeepingService.java](backend/msnofity/service/HousekeepingService.java) |
-| 15. Consumo de voucher | `msnofity` escucha `q.cmd.voucher`, transforma el payload y registra la generación del voucher. | `processVoucher(...)` en [NotificationListener.java](backend/msnofity/listener/NotificationListener.java), que llama a `generateVoucher(...)` en [VoucherService.java](backend/msnofity/service/VoucherService.java) |
-| 16. Error de consumo | Si el consumidor rechaza el mensaje, `default-requeue-rejected=false` evita el reintento automático y la configuración de la cola permite enviarlo al dead-letter exchange. | Propiedad en [application.properties](backend/msnofity/src/main/resources/application.properties) y argumentos de cola en [RabbitMQConfig.java](backend/msnofity/config/RabbitMQConfig.java) |
+| 12. Enrutamiento RabbitMQ | `RabbitTemplate.convertAndSend()` envía housekeeping y voucher a `cmd.direct`, y email a `evt.topic`. | `convertAndSend(...)` en [RabbitMQPublisher.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/messaging/RabbitMQPublisher.java) y bindings en [RabbitMQConfig.java](backend/ms-reservations/src/main/java/com/andesstay/msreservations/config/RabbitMQConfig.java) |
+| 13. Consumo de email | `msnofity` escucha `q.email`, extrae `payload` y llama a Resend para enviar el correo. | `processNotification(...)` en [NotificationListener.java](backend/msnofity/listener/NotificationListener.java), que llama a `sendEmail(...)` en [NotificationService.java](backend/msnofity/service/NotificationService.java) |
+| 14. Consumo de housekeeping | `msnofity` escucha la cola dedicada `q.housekeeper` y procesa tickets de limpieza. | `processHousekeeping(...)` en [HousekeepingListener.java](backend/msnofity/listener/HousekeepingListener.java) |
+| 15. Consumo de voucher | `msnofity` escucha la cola dedicada `q.voucher` y genera vouchers. | `processVoucher(...)` en [VoucherListener.java](backend/msnofity/listener/VoucherListener.java) |
+| 16. ACK, reintento y DLQ | Los listeners confirman con ACK manual al tener éxito. Errores transitorios se reintentan hasta tres veces; errores permanentes o reintentos agotados hacen NACK sin requeue. | [ManualAckMessageProcessor.java](backend/msnofity/messaging/ManualAckMessageProcessor.java) |
+| 17. Registro de DLQ | Un consumidor común registra cola, routing key, cabecera `x-death` y payload de los mensajes muertos, luego confirma su recepción. | [DeadLetterListener.java](backend/msnofity/listener/DeadLetterListener.java) |
 
 #### Resumen por escenario
 
@@ -296,22 +299,28 @@ El consumidor de email también contempla el tipo `WEBPUSH`, pero actualmente so
 ### Microservicios y código relacionado
 
 - `backend/ms-reservations`: dependencia `spring-boot-starter-amqp`, configuración de exchanges/colas/bindings en `RabbitMQConfig` y publicación en `RabbitMQPublisher`. `ReservationService` decide cuándo publicar.
-- `backend/msnofity`: conexión al broker en `application.properties`, declaración de la topología y consumo en `NotificationListener`. Los servicios `NotificationService`, `HousekeepingService` y `VoucherService` ejecutan las acciones.
+- `backend/msnofity`: conexión y topología en `application.properties`/`RabbitMQConfig`; consumidores separados por dominio en `HousekeepingListener`, `VoucherListener` y `NotificationListener`; ACK/reintentos en `ManualAckMessageProcessor` y registro DLQ en `DeadLetterListener`.
 - `backend/ms-catalog`: tiene la dependencia AMQP y propiedades de conexión, pero actualmente no usa RabbitMQ funcionalmente.
-- `docker-compose.messaging.yml`: inicia el broker con la imagen `rabbitmq:3-management`.
-- `docker-compose.yml`: conecta `ms-reservations` y `msnofity` con el hostname Docker `rabbitmq`.
+- `docker-compose.messaging.yml`: inicia `rabbit1` y `rabbit2` con la misma cookie Erlang y peer discovery estático, en la red compartida `andesstay-messaging`.
+- `docker-compose.yml`: conecta los microservicios de mensajería a la red externa `andesstay-messaging` y `ms-reservations`/`msnofity` a ambos nodos mediante `rabbit1:5672,rabbit2:5672`.
 
 ### Configuración y ejecución
 
-RabbitMQ se ejecuta como contenedor con:
+RabbitMQ se ejecuta como un clúster Docker Compose de dos nodos. El primer nodo queda disponible en los puertos host `5672` (AMQP) y `15672` (Management); el segundo, en `5673` y `15673`. Dentro de Docker, las aplicaciones se conectan a los dos nodos por sus nombres DNS.
 
 | Parámetro | Valor Docker | Valor local predeterminado |
 | --- | --- | --- |
-| Host | `rabbitmq` | `localhost` |
-| Puerto AMQP | `5672` | `5672` |
-| Usuario | `guest` | `guest` |
-| Contraseña | `guest` | `guest` |
-| Consola de administración | `http://localhost:15672` | `guest` / `guest` |
+| Host de los nodos | `rabbit1`, `rabbit2` | `localhost` |
+| Puerto AMQP | `5672`, `5673` (host); `5672` en la red Docker | `5672` |
+| Usuario | `RABBITMQ_USER` (por defecto `andesstay`) | `guest` |
+| Contraseña | `RABBITMQ_PASSWORD` | `guest` |
+| Consolas de administración | `http://localhost:15672`, `http://localhost:15673` | No aplica |
+
+Antes de iniciar los contenedores, define en tu `.env` local (no lo publiques) `RABBITMQ_USER`, una contraseña fuerte `RABBITMQ_PASSWORD` y una cookie compartida `RABBITMQ_ERLANG_COOKIE` para ambos nodos. Puedes mantener las variables Kafka/Resend que ya usa el proyecto. La cookie debe ser igual en ambos nodos y mantenerse estable entre reinicios para conservar el clúster.
+
+En AWS EC2, autoriza AMQP (`5672` y, si clientes externos se conectarán directamente al segundo nodo, `5673`) solo desde las IP/redes de clientes que correspondan. Restringe las consolas `15672`/`15673` al acceso administrativo de confianza. La comunicación de clúster debe permanecer en la red privada entre nodos; no expongas puertos de distribución/epmd públicamente.
+
+Si los microservicios se ejecutan en otra máquina/EC2, define `RABBITMQ_ADDRESSES` con la IP privada del host RabbitMQ y ambos puertos publicados, por ejemplo `10.0.1.20:5672,10.0.1.20:5673`. Los nombres `rabbit1`/`rabbit2` solo se resuelven dentro de la red Docker compartida.
 
 Para levantarlo junto con Kafka:
 
@@ -319,21 +328,37 @@ Para levantarlo junto con Kafka:
 docker compose -f docker-compose.messaging.yml up -d
 ```
 
+Si ya tenías el broker anterior en un contenedor llamado `rabbitmq`, detén ese contenedor antes de iniciar el nuevo clúster porque también ocupa el puerto `5672`. No borres su volumen: los mensajes/topología del broker anterior no se transfieren automáticamente al clúster nuevo.
+
 Para levantar la aplicación completa, ejecutar después:
 
 ```powershell
 docker compose up -d --build
 ```
 
-En Docker, `ms-reservations` usa `SPRING_RABBITMQ_HOST=rabbitmq` y `SPRING_RABBITMQ_PORT=5672`; `msnofity` usa `RABBITMQ_HOST=rabbitmq`, `RABBITMQ_PORT=5672`, `RABBITMQ_USER` y `RABBITMQ_PASSWORD`. Ejecutando los servicios fuera de Docker, la conexión local usa `localhost:5672`.
+En Docker, `ms-reservations` y `msnofity` intentan conectarse a ambos nodos (`rabbit1:5672,rabbit2:5672`). Ejecutando los servicios fuera de Docker, la conexión local predeterminada usa `localhost:5672`.
 
 ### Verificación y diagnóstico
 
-1. Abrir `http://localhost:15672` y revisar que existan `cmd.direct`, las tres colas principales y las DLQ.
-2. Crear una reserva y comprobar que `ms-reservations` registra la publicación solo si corresponde al estado/configuración.
-3. Confirmar una reserva y revisar los logs de `msnofity` para las rutas `q.cmd.housekeeping` y `q.cmd.voucher`.
-4. Si el email está habilitado, configurar `RESEND_API_KEY` y `RESEND_FROM_EMAIL`; sin esas variables el consumo del email puede fallar.
-5. Revisar las DLQ si una cola principal acumula mensajes o si un consumidor rechaza el procesamiento.
+1. Consultar `docker compose -f docker-compose.messaging.yml exec rabbit1 rabbitmqctl cluster_status` y confirmar que aparecen `rabbit@rabbit1` y `rabbit@rabbit2`.
+2. Abrir `http://localhost:15672` o `http://localhost:15673` y revisar `cmd.direct`, `evt.topic`, las tres colas y las DLQ.
+3. Crear una reserva y comprobar que `ms-reservations` registra la publicación solo si corresponde al estado/configuración.
+4. Confirmar una reserva y revisar los logs de `msnofity` para los comandos housekeeping/voucher y el evento de auditoría.
+5. Si el email está habilitado, configurar `RESEND_API_KEY` y `RESEND_FROM_EMAIL`; sin esas variables el consumo del email puede fallar.
+6. Consultar los logs de `msnofity` para verificar que los consumidores registran mensajes de las DLQ y los confirman después del log.
+
+### Pruebas RabbitMQ
+
+En `backend/ms-reservations` hay pruebas Mockito que comprueban que una transición inválida no publica comandos y que las publicaciones válidas usan el exchange y routing key configurados. En `backend/msnofity` hay pruebas unitarias de reintentos y ACK/NACK, más pruebas de integración que inician RabbitMQ con Testcontainers y comprueban routing direct/topic y el envío a DLQ al rechazar sin requeue. Las pruebas de integración se omiten automáticamente si Docker no está disponible.
+
+```powershell
+.\backend\ms-reservations\mvnw.cmd -f .\backend\ms-reservations\pom.xml '-Dtest=RabbitMQPublisherTest,ReservationServiceRabbitMQTest' verify
+.\backend\ms-reservations\mvnw.cmd -f .\backend\msnofity\pom.xml verify
+```
+
+JaCoCo genera cobertura de líneas e instrucciones, entre otras métricas, en `backend/ms-reservations/target/site/jacoco/index.html` y `backend/msnofity/target/site/jacoco/index.html`. El informe `ms-reservations` de arriba limita sus resultados a las pruebas indicadas; `msnofity` ejecuta sus tests unitarios y de integración disponibles. Una prueba de integración que no pueda arrancar Docker se reportará como omitida. Los porcentajes expresan cobertura de código, no cumplimiento funcional de todos los requisitos.
+
+El repositorio todavía no incluye API/controlador de Rabbit admin ni `RabbitAdminService`; por eso no hay pruebas de MockMvc para nombre vacío ni pruebas unitarias del servicio admin. Se deben agregar junto con la implementación real, en vez de crear pruebas desacopladas de código inexistente.
 
 RabbitMQ no garantiza por sí mismo que una operación de negocio y su publicación sean atómicas: la reserva se guarda en PostgreSQL y el comando se publica después desde la misma lógica de servicio. Para producción convendría evaluar confirmaciones del publisher, reintentos controlados, consumidores idempotentes y un patrón outbox.
 
@@ -385,13 +410,16 @@ Todas las rutas del BFF requieren autenticación, salvo que la configuración de
 
 ## Configuración
 
-El archivo `.env` de ejemplo del repositorio contiene:
+Agrega estas variables a tu `.env` local (no las publiques ni reemplaces las variables Kafka ya existentes):
 
 ```dotenv
 KAFKA_HOST=kafka:29092
-RABBITMQ_HOST=rabbitmq
-RABBITMQ_PORT=5672
 KAFKA_ADVERTISED_HOST=172.31.26.215
+RABBITMQ_USER=andesstay
+RABBITMQ_PASSWORD=replace-with-a-strong-password
+RABBITMQ_ERLANG_COOKIE=replace-with-a-long-random-shared-secret
+# Opcional si ms-reservations/msnofity corren fuera de esta red Docker:
+# RABBITMQ_ADDRESSES=10.0.1.20:5672,10.0.1.20:5673
 ```
 
 `KAFKA_ADVERTISED_HOST` debe cambiarse por la IP o DNS que usarán los clientes externos. No se debe publicar una credencial real en el repositorio. Para email, agregar por ejemplo:
@@ -416,13 +444,14 @@ Comprobar el estado:
 
 ```powershell
 docker compose -f docker-compose.messaging.yml ps
+docker compose -f docker-compose.messaging.yml exec rabbit1 rabbitmqctl cluster_status
 docker compose ps
 ```
 
 URLs útiles:
 
 - BFF: `http://localhost:8080`
-- RabbitMQ Management: `http://localhost:15672` (`guest` / `guest`)
+- RabbitMQ Management: `http://localhost:15672` o `http://localhost:15673` (credenciales de `RABBITMQ_USER` / `RABBITMQ_PASSWORD`)
 - PostgreSQL: `localhost:5433`
 - Kafka externo: `localhost:9092`
 
@@ -538,7 +567,7 @@ En PowerShell, repetir el patrón cambiando el directorio por `ms-catalog`, `ms-
 - `catalog.events` tiene productor, pero no se encontró un consumidor activo en el backend.
 - `msreport` almacena los eventos recibidos y calcula KPIs a partir de ellos; no es un motor de analítica externa.
 - Housekeeping, web push y voucher están implementados como puntos de integración/logging, no como flujos persistidos completos.
-- Conviene revisar los nombres de dead-letter routing keys de `ms-reservations` y `msnofity` antes de usar DLQ en producción, porque parte de esa topología se declara en ambos servicios.
+- Los nombres de la topología se configuran en ambos servicios; mantener sincronizados sus valores `app.rabbitmq.*` al agregar colas o routing keys.
 
 ## Desarrollo y pruebas
 
