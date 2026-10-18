@@ -12,9 +12,6 @@ public class AuditEvent {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "event_id", unique = true)
-    private String eventId;
-
     private String eventType;
     private String aggregateId;
     private String actor;
@@ -26,10 +23,8 @@ public class AuditEvent {
 
     public AuditEvent() {}
 
-    public AuditEvent(Long id, String eventId, String eventType, String aggregateId, String actor,
-                      String payload, LocalDateTime timestamp) {
+    public AuditEvent(Long id, String eventType, String aggregateId, String actor, String payload, LocalDateTime timestamp) {
         this.id = id;
-        this.eventId = eventId;
         this.eventType = eventType;
         this.aggregateId = aggregateId;
         this.actor = actor;
@@ -38,7 +33,6 @@ public class AuditEvent {
     }
 
     public Long getId() { return id; }
-    public String getEventId() { return eventId; }
     public String getEventType() { return eventType; }
     public String getAggregateId() { return aggregateId; }
     public String getActor() { return actor; }

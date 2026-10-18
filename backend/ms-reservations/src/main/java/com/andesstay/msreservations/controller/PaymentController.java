@@ -2,35 +2,37 @@ package com.andesstay.msreservations.controller;
 
 import com.andesstay.msreservations.dto.PaymentInitResponseDto;
 import com.andesstay.msreservations.dto.StatusUpdateRequest;
-import com.andesstay.msreservations.messaging.KafkaPublisher;
 import com.andesstay.msreservations.model.Reservation;
 import com.andesstay.msreservations.model.ReservationStatus;
-import com.andesstay.msreservations.repository.ReservationRepository;
+import com.andesstay.msreservations.security.AuthenticatedUser;
 import com.andesstay.msreservations.service.ReservationService;
 import com.andesstay.msreservations.service.WebpayService;
 import com.andesstay.msreservations.service.WebpayService.WebpayCommitResponse;
 import com.andesstay.msreservations.service.WebpayService.WebpayCreateResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/reservations")
 @RequiredArgsConstructor
+@Slf4j
 public class PaymentController {
 
     private final WebpayService webpayService;
-    private final ReservationRepository reservationRepository;
     private final ReservationService reservationService;
-    private final KafkaPublisher kafkaPublisher;
 
     @PostMapping("/{id}/pay")
-    public ResponseEntity<?> iniciarPago(@PathVariable Long id) {
-        Reservation reservation = reservationRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Reserva no encontrada con ID: " + id));
+    public ResponseEntity<?> iniciarPago(@PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
+        Reservation reservation = reservationService.getReservationForUser(
+                id, AuthenticatedUser.from(jwt));
 
         try {
             String sessionId = "SESS-" + reservation.getGuestId();
@@ -42,75 +44,45 @@ public class PaymentController {
 
             return ResponseEntity.ok(new PaymentInitResponseDto(response.getUrl(), response.getToken()));
         } catch (Exception e) {
+            log.error("No se pudo iniciar el pago de la reserva {}", id, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error al iniciar pago en Webpay: " + e.getMessage()));
+                    .body(Map.of("error", "No se pudo iniciar el pago. Inténtalo de nuevo."));
         }
     }
 
-// Importa RequestMethod si no lo tienes: import org.springframework.web.bind.annotation.RequestMethod;
-
-    @RequestMapping(value = "/confirm-payment", method = {RequestMethod.GET, RequestMethod.POST})
-    public ResponseEntity<?> confirmarPago(
-            @RequestParam(value = "token_ws", required = false) String tokenWs,
-            @RequestParam(value = "TBK_TOKEN", required = false) String tbkToken,
-            @RequestParam(value = "TBK_ORDEN_COMPRA", required = false) String tbkOrdenCompra,
-            @RequestParam(value = "TBK_ID_SESION", required = false) String tbkIdSesion) {
-
+    @PostMapping("/confirm-payment")
+    public ResponseEntity<?> confirmarPago(@RequestParam("token_ws") String token,
+                                           @AuthenticationPrincipal Jwt jwt) {
+        AuthenticatedUser user = AuthenticatedUser.from(jwt);
         try {
-            // 1. Si el usuario canceló el pago en Transbank
-            if (tokenWs == null && tbkToken != null) {
-                return ResponseEntity.status(HttpStatus.FOUND)
-                        .header("Location", "http://localhost:5173/payment-result?status=cancelled")
-                        .build();
-            }
-
-            // 2. Si Transbank no envió ningún token válido
-            if (tokenWs == null) {
-                return ResponseEntity.status(HttpStatus.FOUND)
-                        .header("Location", "http://localhost:5173/payment-result?status=error")
-                        .build();
-            }
-
-            // 3. Confirmar la transacción con Transbank
-            WebpayCommitResponse response = webpayService.commitTransaction(tokenWs);
+            WebpayCommitResponse response = webpayService.commitTransaction(token);
 
             if (response.getResponseCode() == 0 && "AUTHORIZED".equals(response.getStatus())) {
                 Long reservationId = Long.parseLong(response.getBuyOrder().replace("ORD-", ""));
-                Reservation reservation = reservationRepository.findById(reservationId)
-                        .orElseThrow(() -> new IllegalArgumentException(
-                                "Reserva no encontrada con ID: " + reservationId
-                        ));
+                reservationService.getReservationForUser(reservationId, user);
 
-                kafkaPublisher.publishPaymentAuthorized(reservation, response);
+                StatusUpdateRequest statusRequest = new StatusUpdateRequest();
+                statusRequest.setStatus(ReservationStatus.CONFIRMADA);
 
-                if (reservation.getStatus() == ReservationStatus.CREADA) {
-                    updateReservationStatus(reservationId, ReservationStatus.CONFIRMADA);
-                }
-                if (reservation.getStatus() == ReservationStatus.CREADA
-                        || reservation.getStatus() == ReservationStatus.CONFIRMADA) {
-                    updateReservationStatus(reservationId, ReservationStatus.CHECKIN_PENDIENTE);
-                }
+                reservationService.updateStatus(reservationId, statusRequest, user.actor());
 
-                // Rebotar al frontend con éxito
-                return ResponseEntity.status(HttpStatus.FOUND)
-                        .header("Location", "http://localhost:5173/payment-result?status=success&id=" + reservationId)
-                        .build();
+                return ResponseEntity.ok(Map.of(
+                        "status", "APPROVED",
+                        "reservationId", reservationId,
+                        "amount", response.getAmount(),
+                        "authorizationCode", response.getAuthorizationCode()
+                ));
             } else {
-                // Si el banco rechazó la tarjeta
-                return ResponseEntity.status(HttpStatus.FOUND)
-                        .header("Location", "http://localhost:5173/payment-result?status=rejected")
-                        .build();
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(Map.of("status", "REJECTED", "responseCode", response.getResponseCode()));
             }
+        } catch (ResponseStatusException e) {
+            throw e;
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.FOUND)
-                    .header("Location", "http://localhost:5173/payment-result?status=error")
-                    .build();
+            log.error("No se pudo confirmar el pago en Webpay", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "No se pudo confirmar el pago. Inténtalo de nuevo."));
         }
     }
 
-    private void updateReservationStatus(Long reservationId, ReservationStatus status) {
-        StatusUpdateRequest statusRequest = new StatusUpdateRequest();
-        statusRequest.setStatus(status);
-        reservationService.updateStatus(reservationId, statusRequest, "TRANSBANK", "Transbank");
-    }
 }

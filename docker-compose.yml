@@ -1,7 +1,3 @@
-include:
-  - docker-compose.messaging.yml
-
-
 services:
   postgres-db:
     image: postgres:15-alpine

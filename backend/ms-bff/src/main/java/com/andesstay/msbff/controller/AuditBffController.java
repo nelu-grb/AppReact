@@ -9,7 +9,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 @RestController
-@RequestMapping({"/audit", "/api/audit"})
+@RequestMapping("/audit")
 public class AuditBffController {
 
     private final WebClient auditWebClient;

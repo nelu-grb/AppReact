@@ -12,19 +12,19 @@ public class RabbitPublisherCallbacks {
 
     public RabbitPublisherCallbacks(RabbitTemplate rabbitTemplate) {
 
-        // El broker responde ACK o NACK por cada mensaje publicado
+        // el broker confirma o rechaza cada mensaje publicado.
         rabbitTemplate.setConfirmCallback((correlation, ack, cause) -> {
             String id = (correlation != null) ? correlation.getId() : "sin-id";
             if (ack) {
-                log.info("[CONFIRM] Broker confirmó el mensaje {}", id);
+                log.info("[CONFIRM] el broker confirmó el mensaje {}", id);
             } else {
-                log.error("[CONFIRM] Broker RECHAZÓ el mensaje {}: {}", id, cause);
+                log.error("[CONFIRM] el broker rechazó el mensaje {}: {}", id, cause);
             }
         });
 
-        // El mensaje llegó al Exchange pero NO PUDO enrutarse a ninguna cola
+        // avisa si el mensaje no llegó a ninguna cola.
         rabbitTemplate.setReturnsCallback(returned ->
-            log.error("[RETURN] Mensaje NO ENRUTADO exchange={} routingKey={} motivo={}",
+            log.error("[RETURN] mensaje sin destino: intercambio={} clave={} motivo={}",
                     returned.getExchange(), returned.getRoutingKey(), returned.getReplyText()));
     }
 }

@@ -19,7 +19,7 @@ public class RabbitMQPublisher {
 
     private final RabbitTemplate rabbitTemplate;
 
-    // Método auxiliar para forzar persistencia en disco por mensaje
+    // deja el mensaje guardado en el broker hasta que se procese.
     private MessagePostProcessor persistent() {
         return message -> {
             message.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);
@@ -83,7 +83,7 @@ public class RabbitMQPublisher {
         );
     }
 
-    // Nuevo método para publicar evento Pub/Sub al exchange Fanout
+    // publica un evento para todos los servicios suscritos.
     public void publishReservationConfirmed(Long reservationId, Map<String, Object> payload) {
         String eventId = UUID.randomUUID().toString();
         Map<String, Object> envelope = new HashMap<>();
@@ -95,7 +95,7 @@ public class RabbitMQPublisher {
 
         rabbitTemplate.convertAndSend(
                 RabbitMQConfig.EVT_EXCHANGE,
-                "", // En fanout la routing key se ignora
+                "", // fanout no usa una clave de enrutamiento.
                 envelope,
                 persistent(),
                 new CorrelationData(eventId)

@@ -27,26 +27,28 @@ public class ReservationBffController {
 
     @PostMapping
     public Mono<ReservationResponse> create(@Valid @RequestBody ReservationRequest request,
-                                             @AuthenticationPrincipal Jwt jwt) {
+                                            @AuthenticationPrincipal Jwt jwt) {
         return reservationsWebClient.post()
                 .uri("/api/reservations")
-                .header("X-Actor", actorId(jwt))
-                .header("X-Actor-Name", actorDisplayName(jwt))
+                .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(ReservationResponse.class);
     }
 
     @GetMapping("/{id}")
-    public Mono<ReservationResponse> getById(@PathVariable Long id) {
+    public Mono<ReservationResponse> getById(@PathVariable Long id,
+                                             @AuthenticationPrincipal Jwt jwt) {
         return reservationsWebClient.get()
                 .uri("/api/reservations/{id}", id)
+                .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                 .retrieve()
                 .bodyToMono(ReservationResponse.class);
     }
 
     @GetMapping
     public Mono<List<ReservationResponse>> list(
+            @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) LocalDate from,
             @RequestParam(required = false) LocalDate to) {
@@ -57,6 +59,7 @@ public class ReservationBffController {
                         .queryParamIfPresent("from", java.util.Optional.ofNullable(from))
                         .queryParamIfPresent("to", java.util.Optional.ofNullable(to))
                         .build())
+                .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<List<ReservationResponse>>() {});
     }
@@ -67,33 +70,38 @@ public class ReservationBffController {
                                                    @AuthenticationPrincipal Jwt jwt) {
         return reservationsWebClient.put()
                 .uri("/api/reservations/{id}/status", id)
-                .header("X-Actor", actorId(jwt))
-                .header("X-Actor-Name", actorDisplayName(jwt))
+                .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(ReservationResponse.class);
     }
 
     @DeleteMapping("/{id}")
-    public Mono<Void> delete(@PathVariable Long id) {
+    public Mono<Void> delete(@PathVariable Long id,
+                             @AuthenticationPrincipal Jwt jwt) {
         return reservationsWebClient.delete()
                 .uri("/api/reservations/{id}", id)
+                .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                 .retrieve()
                 .bodyToMono(Void.class);
     }
 
     @GetMapping("/by-unit/{unitId}")
-    public Mono<List<ReservationResponse>> getByUnit(@PathVariable Long unitId) {
+    public Mono<List<ReservationResponse>> getByUnit(@PathVariable Long unitId,
+                                                     @AuthenticationPrincipal Jwt jwt) {
         return reservationsWebClient.get()
                 .uri("/api/reservations/by-unit/{unitId}", unitId)
+                .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<List<ReservationResponse>>() {});
     }
 
     @PostMapping("/{id}/pay")
-    public Mono<ResponseEntity<Object>> payReservation(@PathVariable Long id) {
+    public Mono<ResponseEntity<Object>> payReservation(@PathVariable Long id,
+                                                       @AuthenticationPrincipal Jwt jwt) {
         return reservationsWebClient.post()
                 .uri("/api/reservations/{id}/pay", id)
+                .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                 .retrieve()
                 .toEntity(Object.class);
     }
@@ -106,8 +114,7 @@ public class ReservationBffController {
                         .path("/api/reservations/confirm-payment")
                         .queryParam("token_ws", tokenWs)
                         .build())
-                .header("X-Actor", actorId(jwt))
-                .header("X-Actor-Name", actorDisplayName(jwt))
+                .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
                 .retrieve()
                 .toEntity(Object.class)
                 .onErrorResume(org.springframework.web.reactive.function.client.WebClientResponseException.class,
@@ -116,22 +123,4 @@ public class ReservationBffController {
                         .body("{\"message\": \"No se pudo confirmar el pago con el servicio de reservas.\"}")));
     }
 
-    private String actorId(Jwt jwt) {
-        if (jwt == null) return "SYSTEM_WEBPAY";
-
-        String preferredUsername = jwt.getClaimAsString("preferred_username");
-        if (preferredUsername != null && !preferredUsername.isBlank()) return preferredUsername;
-
-        String uniqueName = jwt.getClaimAsString("unique_name");
-        if (uniqueName != null && !uniqueName.isBlank()) return uniqueName;
-
-        String name = jwt.getClaimAsString("name");
-        return name != null && !name.isBlank() ? name : jwt.getSubject();
-    }
-
-    private String actorDisplayName(Jwt jwt) {
-        if (jwt == null) return "Sistema Webpay";
-        String name = jwt.getClaimAsString("name");
-        return name != null && !name.isBlank() ? name : actorId(jwt);
-    }
 }
