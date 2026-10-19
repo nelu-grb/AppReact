@@ -1,15 +1,14 @@
 package com.andesstay.msreservations.messaging;
 
-import com.andesstay.msreservations.config.RabbitMQConfig;
 import com.andesstay.msreservations.dto.MessageEnvelope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -18,6 +17,21 @@ import java.util.UUID;
 public class RabbitMQPublisher {
 
     private final RabbitTemplate rabbitTemplate;
+
+    @Value("${app.rabbitmq.exchange.direct}")
+    private String directExchange;
+
+    @Value("${app.rabbitmq.exchange.topic}")
+    private String topicExchange;
+
+    @Value("${app.rabbitmq.routing.commands.housekeeping}")
+    private String housekeepingRoutingKey;
+
+    @Value("${app.rabbitmq.routing.commands.voucher}")
+    private String voucherRoutingKey;
+
+    @Value("${app.rabbitmq.routing.notifications.email}")
+    private String notificationEmailRoutingKey;
 
     // deja el mensaje guardado en el broker hasta que se procese.
     private MessagePostProcessor persistent() {
@@ -36,8 +50,8 @@ public class RabbitMQPublisher {
                 .build();
 
         rabbitTemplate.convertAndSend(
-                RabbitMQConfig.EXCHANGE_DIRECT, 
-                "email.send", 
+                topicExchange,
+                notificationEmailRoutingKey,
                 envelope,
                 persistent(),
                 new CorrelationData(correlationId)
@@ -53,8 +67,8 @@ public class RabbitMQPublisher {
                 .build();
 
         rabbitTemplate.convertAndSend(
-                RabbitMQConfig.EXCHANGE_DIRECT, 
-                "housekeeping.ticket", 
+                directExchange,
+                housekeepingRoutingKey,
                 envelope,
                 persistent(),
                 new CorrelationData(correlationId)
@@ -75,30 +89,12 @@ public class RabbitMQPublisher {
                 .build();
 
         rabbitTemplate.convertAndSend(
-                RabbitMQConfig.EXCHANGE_DIRECT, 
-                "voucher.gen", 
+                directExchange,
+                voucherRoutingKey,
                 envelope,
                 persistent(),
                 new CorrelationData(correlationId)
         );
     }
 
-    // publica un evento para todos los servicios suscritos.
-    public void publishReservationConfirmed(Long reservationId, Map<String, Object> payload) {
-        String eventId = UUID.randomUUID().toString();
-        Map<String, Object> envelope = new HashMap<>();
-        envelope.put("eventId", eventId);
-        envelope.put("type", "RESERVATION_CONFIRMED");
-        envelope.put("timestamp", System.currentTimeMillis());
-        envelope.put("correlationId", "RES-" + reservationId);
-        envelope.put("payload", payload);
-
-        rabbitTemplate.convertAndSend(
-                RabbitMQConfig.EVT_EXCHANGE,
-                "", // fanout no usa una clave de enrutamiento.
-                envelope,
-                persistent(),
-                new CorrelationData(eventId)
-        );
-    }
 }
