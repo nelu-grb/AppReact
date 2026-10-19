@@ -32,13 +32,15 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
       SPRING_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_HOST}
-      SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST}
-      SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT}
-      SPRING_RABBITMQ_USERNAME: guest
-      SPRING_RABBITMQ_PASSWORD: guest
+      SPRING_RABBITMQ_ADDRESSES: ${RABBITMQ_ADDRESSES:-rabbit1:5672,rabbit2:5672}
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-andesstay}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD in .env}
     depends_on:
       postgres-db:
         condition: service_healthy
+    networks:
+      - default
+      - messaging
 
   ms-reservations:
     build:
@@ -53,15 +55,17 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
       SPRING_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_HOST}
-      SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST}
-      SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT}
-      SPRING_RABBITMQ_USERNAME: guest
-      SPRING_RABBITMQ_PASSWORD: guest
-      NOTIFICATIONS_EMAIL_ENABLED: "false"
+      SPRING_RABBITMQ_ADDRESSES: ${RABBITMQ_ADDRESSES:-rabbit1:5672,rabbit2:5672}
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-andesstay}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD in .env}
+      NOTIFICATIONS_EMAIL_ENABLED: "${NOTIFICATIONS_EMAIL_ENABLED:-false}"
       DOWNSTREAM_CATALOG_BASE_URL: http://ms-catalog:8082    
     depends_on:
       postgres-db:
         condition: service_healthy
+    networks:
+      - default
+      - messaging
 
   ms-bff:
     build:
@@ -101,6 +105,9 @@ services:
     depends_on:
       postgres-db:
         condition: service_healthy
+    networks:
+      - default
+      - messaging
 
   msnofity:
     build:
@@ -111,15 +118,17 @@ services:
       - "8084:8084"
     environment:
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx256m
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USER: guest
-      RABBITMQ_PASSWORD: guest
-      RESEND_API_KEY: ${RESEND_API_KEY}
+      RABBITMQ_ADDRESSES: ${RABBITMQ_ADDRESSES:-rabbit1:5672,rabbit2:5672}
+      RABBITMQ_USER: ${RABBITMQ_USER:-andesstay}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD in .env}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
       RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-onboarding@resend.dev}
     depends_on:
       ms-reservations:
         condition: service_started
+    networks:
+      - default
+      - messaging
 
   msreport:
     build:
@@ -139,6 +148,14 @@ services:
     depends_on:
       postgres-db:
         condition: service_healthy
+    networks:
+      - default
+      - messaging
 
 volumes:
   postgres_data:
+
+networks:
+  messaging:
+    name: andesstay-messaging
+    external: true
