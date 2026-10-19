@@ -1,0 +1,3 @@
+com\react\backend\msnofity\messaging\RabbitMQTopologyIntegrationTest.class
+com\react\backend\msnofity\messaging\ManualAckMessageProcessorTest.class
+com\react\backend\msnofity\config\RabbitMQConfigTest.class

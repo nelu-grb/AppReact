@@ -1,0 +1,5 @@
+# Created at 2026-10-19T15:58:46.222
+Boot Manifest-JAR contains absolute paths in classpath 'D:\GithubMasEspacio\AppReact\backend\msnofity\target\test-classes'
+Hint: <argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true</argLine>
+'other' has different root
+
