@@ -20,6 +20,90 @@ AndesStay es el backend de una plataforma para administrar alojamientos y reserv
 
 El BFF recibe las solicitudes del cliente y las deriva al servicio correspondiente. PostgreSQL guarda los datos; Kafka distribuye eventos y RabbitMQ gestiona comandos asíncronos.
 
+## Flujo de una reserva
+
+El frontend no está en este repositorio; el diagrama muestra cómo se comunicaría un cliente web con las APIs disponibles. La creación y la confirmación son solicitudes separadas: al crear, la reserva queda en estado `CREADA`; al confirmarla, se actualiza el estado y se envían comandos a RabbitMQ.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor FE as Frontend
+    participant BFF as BFF · :8080
+    participant RES as Reservas · :8081
+    participant CAT as Catálogo · :8082
+    participant DB as PostgreSQL
+    participant K as Kafka
+    participant MQ as RabbitMQ
+    participant NOT as Notificaciones · :8084
+
+    rect rgb(239, 246, 255)
+        Note over FE,DB: 1 · Crear reserva — solicitud síncrona
+        FE->>BFF: POST /reservations + JWT
+        BFF->>BFF: Valida token y solicitud
+        BFF->>RES: POST /api/reservations + JWT
+        RES->>CAT: Consulta unidad y disponibilidad
+        CAT-->>RES: Datos de unidad, precio y disponibilidad
+        RES->>DB: Guarda reserva con estado CREADA
+        RES->>K: Publica RESERVATION_CREATED
+        RES-->>BFF: Devuelve los datos de la reserva
+        BFF-->>FE: Respuesta de creación
+    end
+
+    rect rgb(240, 253, 244)
+        Note over FE,NOT: 2 · Confirmar reserva — HTTP + tareas asíncronas
+        FE->>BFF: PUT /reservations/{id}/status · CONFIRMADA + JWT
+        BFF->>RES: PUT /api/reservations/{id}/status + JWT
+        RES->>DB: Actualiza el estado
+        RES->>MQ: housekeeping.ticket → cmd.direct
+        RES->>MQ: voucher.gen → cmd.direct
+        opt Email habilitado
+            RES->>MQ: notification.email → evt.topic
+        end
+        RES->>K: Publica RESERVATION_STATUS_UPDATED
+        RES-->>BFF: Devuelve la reserva actualizada
+        BFF-->>FE: Respuesta de confirmación
+        MQ--)NOT: Entrega los comandos desde sus colas
+        Note over MQ,NOT: msnofity procesa los comandos en segundo plano
+    end
+```
+
+El recorrido Frontend ↔ BFF ↔ reservas usa HTTP; el backend también consulta el catálogo, persiste los datos y publica eventos. RabbitMQ procesa sus comandos de forma asíncrona: la respuesta al frontend no espera a que housekeeping, voucher o el email terminen.
+
+## Flujo de RabbitMQ
+
+Al confirmar una reserva, `ms-reservations` publica los siguientes comandos. RabbitMQ los enruta por exchange y clave hacia colas distintas:
+
+```mermaid
+flowchart LR
+    RES[ms-reservations]
+    DIRECT[Exchange cmd.direct]
+    TOPIC[Exchange evt.topic]
+    QH[q.housekeeper]
+    QV[q.voucher]
+    QE[q.email]
+    NOT[msnofity]
+    DLX[cmd.dead.dlx]
+    DLQ[Colas DLQ]
+    RES -->|housekeeping.ticket| DIRECT --> QH
+    RES -->|voucher.gen| DIRECT --> QV
+    RES -->|notification.email| TOPIC --> QE
+    QH --> NOT
+    QV --> NOT
+    QE --> NOT
+    QH -. mensajes rechazados .-> DLX
+    QV -. mensajes rechazados .-> DLX
+    QE -. mensajes rechazados .-> DLX
+    DLX --> DLQ
+```
+
+| Comando | Exchange y clave | Cola | Qué hace hoy `msnofity` |
+| --- | --- | --- | --- |
+| Preparar habitación | `cmd.direct` / `housekeeping.ticket` | `q.housekeeper` | Registra el ticket de housekeeping. |
+| Generar voucher | `cmd.direct` / `voucher.gen` | `q.voucher` | Registra la generación del voucher. |
+| Enviar email | `evt.topic` / `notification.email` | `q.email` | Envía el correo mediante Resend si las notificaciones están habilitadas. |
+
+Las colas de trabajo son durables y tienen colas de mensajes fallidos (`q.housekeeper.dlq`, `q.voucher.dlq` y `q.email.dlq`). El envío de email está desactivado por defecto; housekeeping y voucher se procesan, pero actualmente sus servicios registran la operación en los logs, no ejecutan una integración externa.
+
 ## Requisitos
 
 - Docker Desktop con Docker Compose.
