@@ -19,7 +19,7 @@ import reactor.core.publisher.Mono;
 @RequestMapping("/payments")
 public class PaymentReturnBffController {
 
-    @Value("${app.frontend.base-url:http://localhost:5173}")
+    @Value("${app.frontend.base-url:https://ashy-stone-0e63b4a0f.6.azurestaticapps.net}")
     private String frontendBaseUrl;
 
     @RequestMapping(value = "/return", method = {RequestMethod.GET, RequestMethod.POST})

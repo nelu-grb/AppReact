@@ -60,6 +60,7 @@ services:
       SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD in .env}
       NOTIFICATIONS_EMAIL_ENABLED: "${NOTIFICATIONS_EMAIL_ENABLED:-false}"
       DOWNSTREAM_CATALOG_BASE_URL: http://ms-catalog:8082    
+      TRANSBANK_RETURN_URL: https://hyfvjy63q3.execute-api.us-east-1.amazonaws.com/payments/return
     depends_on:
       postgres-db:
         condition: service_healthy
@@ -79,6 +80,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/andesstay_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+      APP_FRONTEND_BASE_URL: https://ashy-stone-0e63b4a0f.6.azurestaticapps.net
     depends_on:
       postgres-db:
         condition: service_healthy
