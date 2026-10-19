@@ -174,6 +174,12 @@ public class ReservationService {
                     correlationId
             );
 
+            // publica el evento de confirmación para todos los servicios suscritos.
+            Map<String, Object> evtPayload = new HashMap<>();
+            evtPayload.put("reservationId", updated.getId());
+            evtPayload.put("unitId", updated.getUnitId());
+            evtPayload.put("status", "CONFIRMADA");
+            rabbitPublisher.publishReservationConfirmed(updated.getId(), evtPayload);
         }
 
         kafkaPublisher.publishReservationEvent("RESERVATION_STATUS_UPDATED", updated, currentUser);
