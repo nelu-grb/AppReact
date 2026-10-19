@@ -189,6 +189,30 @@ public class ReservationService {
         return mapToResponse(updated);
     }
 
+    @Transactional
+    public void confirmWebpayPayment(Long reservationId, BigDecimal paidAmount) {
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reserva no encontrada"));
+
+        BigDecimal expectedAmount = BigDecimal.valueOf(reservation.getTotalAmount().intValue());
+        if (paidAmount == null || expectedAmount.compareTo(paidAmount) != 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "El monto confirmado por Webpay no coincide con la reserva");
+        }
+
+        if (reservation.getStatus() == ReservationStatus.CHECKIN_PENDIENTE) {
+            return;
+        }
+        if (reservation.getStatus() != ReservationStatus.CONFIRMADA) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "La reserva no se encuentra pendiente de pago");
+        }
+
+        StatusUpdateRequest statusRequest = new StatusUpdateRequest();
+        statusRequest.setStatus(ReservationStatus.CHECKIN_PENDIENTE);
+        updateStatus(reservationId, statusRequest, "SYSTEM_WEBPAY");
+    }
+
     private ReservationResponse mapToResponse(Reservation r) {
         return ReservationResponse.builder()
                 .id(r.getId())

@@ -77,8 +77,6 @@ public class SecurityConfig {
                     .hasAnyRole("ADMIN", "RECEPTIONIST", "AUDIT")
                 .pathMatchers(HttpMethod.GET, "/reservations", "/reservations/*")
                     .hasAnyRole("ADMIN", "RECEPTIONIST", "AUDIT", "GUEST", "GUEST_USER", "HUESPED")
-                .pathMatchers(HttpMethod.POST, "/reservations/confirm-payment")
-                    .hasAnyRole("ADMIN", "RECEPTIONIST", "GUEST", "GUEST_USER", "HUESPED")
                 .pathMatchers(HttpMethod.POST, "/reservations/*/pay")
                     .hasAnyRole("ADMIN", "RECEPTIONIST", "GUEST", "GUEST_USER", "HUESPED")
                 .pathMatchers(HttpMethod.POST, "/reservations")

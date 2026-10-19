@@ -59,6 +59,8 @@ services:
       SPRING_RABBITMQ_PASSWORD: guest
       NOTIFICATIONS_EMAIL_ENABLED: "false"
       DOWNSTREAM_CATALOG_BASE_URL: http://ms-catalog:8082    
+      TRANSBANK_RETURN_URL: ${TRANSBANK_RETURN_URL:-http://localhost:8081/api/reservations/confirm-payment}
+      PAYMENT_RESULT_URL: ${PAYMENT_RESULT_URL:-http://localhost:5173/payment-result}
     depends_on:
       postgres-db:
         condition: service_healthy

@@ -106,21 +106,4 @@ public class ReservationBffController {
                 .toEntity(Object.class);
     }
 
-    @PostMapping("/confirm-payment")
-    public Mono<ResponseEntity<Object>> confirmPayment(@RequestParam("token_ws") String tokenWs,
-                                                       @AuthenticationPrincipal Jwt jwt) {
-        return reservationsWebClient.post()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/api/reservations/confirm-payment")
-                        .queryParam("token_ws", tokenWs)
-                        .build())
-                .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
-                .retrieve()
-                .toEntity(Object.class)
-                .onErrorResume(org.springframework.web.reactive.function.client.WebClientResponseException.class,
-                        ex -> Mono.just(ResponseEntity.status(ex.getStatusCode()).body(ex.getResponseBodyAsString())))
-                .onErrorResume(ex -> Mono.just(ResponseEntity.status(400)
-                        .body("{\"message\": \"No se pudo confirmar el pago con el servicio de reservas.\"}")));
-    }
-
 }

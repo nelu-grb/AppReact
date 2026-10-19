@@ -349,8 +349,13 @@ Todas las rutas del BFF requieren autenticación, salvo que la configuración de
 | `GET` | `/reservations` | Listar reservas; admite `status`, `from` y `to`. |
 | `GET` | `/reservations/{id}` | Obtener una reserva. |
 | `GET` | `/reservations/by-unit/{unitId}` | Listar reservas de una unidad. |
+| `POST` | `/reservations/{id}/pay` | Iniciar un pago Webpay para una reserva confirmada. |
 | `PUT` | `/reservations/{id}/status` | Actualizar el estado. |
 | `DELETE` | `/reservations/{id}` | Eliminar una reserva cancelada. |
+
+El inicio del pago sigue requiriendo el JWT del usuario. Webpay devuelve el navegador mediante un `POST` al callback directo de `ms-reservations` (`/api/reservations/confirm-payment`); ese único callback no requiere el JWT de la aplicación porque Webpay no recibe dicho token. El backend confirma `token_ws` con Transbank antes de cambiar el estado de la reserva. El resto de las rutas continúa protegido por la autenticación existente.
+
+Configura `TRANSBANK_RETURN_URL` con la URL pública del callback y `PAYMENT_RESULT_URL` con la ruta frontend que muestra el resultado (incluye `/payment-result`). En desarrollo local se usan `http://localhost:8081/api/reservations/confirm-payment` y `http://localhost:5173/payment-result` por defecto. En un despliegue, ambos valores deben apuntar a URLs accesibles desde el navegador que completa el pago.
 
 ### Catálogo
 

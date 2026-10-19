@@ -63,7 +63,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/reservations", "/api/reservations/*")
                     .hasAnyRole("ADMIN", "RECEPTIONIST", "AUDIT", "GUEST", "GUEST_USER", "HUESPED")
                 .requestMatchers(HttpMethod.POST, "/api/reservations/confirm-payment")
-                    .hasAnyRole("ADMIN", "RECEPTIONIST", "GUEST", "GUEST_USER", "HUESPED")
+                    .permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/reservations/*/pay")
                     .hasAnyRole("ADMIN", "RECEPTIONIST", "GUEST", "GUEST_USER", "HUESPED")
                 .requestMatchers(HttpMethod.POST, "/api/reservations")
