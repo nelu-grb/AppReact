@@ -16,60 +16,23 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitMQConfig {
 
-    @Value("${app.rabbitmq.exchange.direct}")
-    private String directExchangeName;
+    // intercambios de mensajes.
+    public static final String EXCHANGE_DIRECT = "cmd.direct";
+    public static final String EXCHANGE_TOPIC = "cmd.topic";
+    public static final String EXCHANGE_DLX = "cmd.dead.dlx";
+    public static final String EVT_EXCHANGE = "evt.fanout";
 
-    @Value("${app.rabbitmq.exchange.topic}")
-    private String topicExchangeName;
-
-    @Value("${app.rabbitmq.exchange.dlx}")
-    private String deadLetterExchangeName;
-
-    @Value("${app.rabbitmq.queue.housekeeping}")
-    private String housekeepingQueueName;
-
-    @Value("${app.rabbitmq.queue.voucher}")
-    private String voucherQueueName;
-
-    @Value("${app.rabbitmq.queue.email}")
-    private String emailQueueName;
-
-    @Value("${app.rabbitmq.queue.housekeeping.dlq}")
-    private String housekeepingDeadLetterQueueName;
-
-    @Value("${app.rabbitmq.queue.voucher.dlq}")
-    private String voucherDeadLetterQueueName;
-
-    @Value("${app.rabbitmq.queue.email.dlq}")
-    private String emailDeadLetterQueueName;
-
-    @Value("${app.rabbitmq.routing.commands.housekeeping}")
-    private String housekeepingRoutingKey;
-
-    @Value("${app.rabbitmq.routing.commands.voucher}")
-    private String voucherRoutingKey;
-
-    @Value("${app.rabbitmq.routing.notifications.binding}")
-    private String notificationsBindingKey;
-
-    @Value("${app.rabbitmq.queue.max-length:10000}")
-    private int queueMaxLength;
-
-    @Value("${app.rabbitmq.queue.message-ttl-ms:86400000}")
-    private long queueMessageTtlMs;
-
-    @Value("${app.rabbitmq.queue.overflow:reject-publish-dlx}")
-    private String queueOverflow;
-
-    @Value("${app.rabbitmq.queue.dlq.max-length:10000}")
-    private int deadLetterQueueMaxLength;
-
-    @Value("${app.rabbitmq.queue.dlq.message-ttl-ms:2592000000}")
-    private long deadLetterQueueMessageTtlMs;
+    // colas para procesar los comandos.
+    public static final String QUEUE_EMAIL = "q.cmd.email";
+    public static final String QUEUE_HOUSEKEEPING = "q.cmd.housekeeping";
+    public static final String QUEUE_VOUCHER = "q.cmd.voucher";
+    public static final String QUEUE_EMAIL_DLQ = QUEUE_EMAIL + ".dlq";
+    public static final String QUEUE_HOUSEKEEPING_DLQ = QUEUE_HOUSEKEEPING + ".dlq";
+    public static final String QUEUE_VOUCHER_DLQ = QUEUE_VOUCHER + ".dlq";
 
     @Bean
     public DirectExchange directExchange() {
-        return new DirectExchange(directExchangeName, true, false);
+        return new DirectExchange(EXCHANGE_DIRECT, true, false); // se mantiene en el broker.
     }
 
     @Bean
@@ -79,7 +42,21 @@ public class RabbitMQConfig {
 
     @Bean
     public DirectExchange deadLetterExchange() {
-        return new DirectExchange(deadLetterExchangeName, true, false);
+        return new DirectExchange(EXCHANGE_DLX, true, false);
+    }
+
+    // intercambia eventos con todos los servicios suscritos.
+    @Bean
+    public FanoutExchange evtExchange() {
+        return new FanoutExchange(EVT_EXCHANGE, true, false);
+    }
+
+    @Bean
+    public Queue emailQueue() {
+        return QueueBuilder.durable(QUEUE_EMAIL)
+                .withArgument("x-dead-letter-exchange", EXCHANGE_DLX)
+                .withArgument("x-dead-letter-routing-key", QUEUE_EMAIL + ".dlq")
+                .build();
     }
 
     @Bean

@@ -18,21 +18,6 @@ public class RabbitMQPublisher {
 
     private final RabbitTemplate rabbitTemplate;
 
-    @Value("${app.rabbitmq.exchange.direct}")
-    private String directExchange;
-
-    @Value("${app.rabbitmq.exchange.topic}")
-    private String topicExchange;
-
-    @Value("${app.rabbitmq.routing.commands.housekeeping}")
-    private String housekeepingRoutingKey;
-
-    @Value("${app.rabbitmq.routing.commands.voucher}")
-    private String voucherRoutingKey;
-
-    @Value("${app.rabbitmq.routing.notifications.email}")
-    private String notificationEmailRoutingKey;
-
     // deja el mensaje guardado en el broker hasta que se procese.
     private MessagePostProcessor persistent() {
         return message -> {
@@ -97,4 +82,22 @@ public class RabbitMQPublisher {
         );
     }
 
+    // publica un evento para todos los servicios suscritos.
+    public void publishReservationConfirmed(Long reservationId, Map<String, Object> payload) {
+        String eventId = UUID.randomUUID().toString();
+        Map<String, Object> envelope = new HashMap<>();
+        envelope.put("eventId", eventId);
+        envelope.put("type", "RESERVATION_CONFIRMED");
+        envelope.put("timestamp", System.currentTimeMillis());
+        envelope.put("correlationId", "RES-" + reservationId);
+        envelope.put("payload", payload);
+
+        rabbitTemplate.convertAndSend(
+                RabbitMQConfig.EVT_EXCHANGE,
+                "", // fanout no usa una clave de enrutamiento.
+                envelope,
+                persistent(),
+                new CorrelationData(eventId)
+        );
+    }
 }
