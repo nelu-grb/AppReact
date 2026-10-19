@@ -21,9 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -176,12 +174,6 @@ public class ReservationService {
                     correlationId
             );
 
-            // publica el evento de confirmación para todos los servicios suscritos.
-            Map<String, Object> evtPayload = new HashMap<>();
-            evtPayload.put("reservationId", updated.getId());
-            evtPayload.put("unitId", updated.getUnitId());
-            evtPayload.put("status", "CONFIRMADA");
-            rabbitPublisher.publishReservationConfirmed(updated.getId(), evtPayload);
         }
 
         kafkaPublisher.publishReservationEvent("RESERVATION_STATUS_UPDATED", updated, currentUser);
