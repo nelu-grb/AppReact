@@ -90,6 +90,7 @@ public class SecurityConfig {
                 .pathMatchers("/audit/**").hasAnyRole("ADMIN", "AUDIT")
                 .pathMatchers("/reports/**").hasRole("ADMIN")
                 .pathMatchers("/api/deployments/**").hasRole("ADMIN")
+                .pathMatchers("/payments/return").permitAll()
                 .anyExchange().denyAll()
             );
 

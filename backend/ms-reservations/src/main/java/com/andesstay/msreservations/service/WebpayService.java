@@ -17,7 +17,7 @@ public class WebpayService {
     private final RestTemplate restTemplate = new RestTemplate();
 
     // usa esta url si transbank.return-url no está configurada.
-    @Value("${transbank.return-url:http://localhost:5173/payment/result}")
+    @Value("${transbank.return-url:http://localhost:8080/payments/return}")
     private String returnUrl;
 
     private static final String WEBPAY_URL = "https://webpay3gint.transbank.cl/rswebpaytransaction/api/webpay/v1.2/transactions";

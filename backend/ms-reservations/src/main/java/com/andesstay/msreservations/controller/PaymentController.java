@@ -62,7 +62,8 @@ public class PaymentController {
                 reservationService.getReservationForUser(reservationId, user);
 
                 StatusUpdateRequest statusRequest = new StatusUpdateRequest();
-                statusRequest.setStatus(ReservationStatus.CONFIRMADA);
+                // pago exitoso: CONFIRMADA pasa a CHECKIN_PENDIENTE ("pagada, lista para tu llegada")
+                statusRequest.setStatus(ReservationStatus.CHECKIN_PENDIENTE);
 
                 reservationService.updateStatus(reservationId, statusRequest, user.actor());
 
