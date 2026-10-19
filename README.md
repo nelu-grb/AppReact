@@ -36,35 +36,31 @@ sequenceDiagram
     participant MQ as RabbitMQ
     participant NOT as Notificaciones · :8084
 
-    rect rgb(239, 246, 255)
-        Note over FE,DB: 1 · Crear reserva — solicitud síncrona
-        FE->>BFF: POST /reservations + JWT
-        BFF->>BFF: Valida token y solicitud
-        BFF->>RES: POST /api/reservations + JWT
-        RES->>CAT: Consulta unidad y disponibilidad
-        CAT-->>RES: Datos de unidad, precio y disponibilidad
-        RES->>DB: Guarda reserva con estado CREADA
-        RES->>K: Publica RESERVATION_CREATED
-        RES-->>BFF: Devuelve los datos de la reserva
-        BFF-->>FE: Respuesta de creación
-    end
+    Note over FE,DB: 1 · Crear reserva — solicitud síncrona
+    FE->>BFF: POST /reservations + JWT
+    BFF->>BFF: Valida token y solicitud
+    BFF->>RES: POST /api/reservations + JWT
+    RES->>CAT: Consulta unidad y disponibilidad
+    CAT-->>RES: Datos de unidad, precio y disponibilidad
+    RES->>DB: Guarda reserva con estado CREADA
+    RES->>K: Publica RESERVATION_CREATED
+    RES-->>BFF: Devuelve los datos de la reserva
+    BFF-->>FE: Respuesta de creación
 
-    rect rgb(240, 253, 244)
-        Note over FE,NOT: 2 · Confirmar reserva — HTTP + tareas asíncronas
-        FE->>BFF: PUT /reservations/{id}/status · CONFIRMADA + JWT
-        BFF->>RES: PUT /api/reservations/{id}/status + JWT
-        RES->>DB: Actualiza el estado
-        RES->>MQ: housekeeping.ticket → cmd.direct
-        RES->>MQ: voucher.gen → cmd.direct
-        opt Email habilitado
-            RES->>MQ: notification.email → evt.topic
-        end
-        RES->>K: Publica RESERVATION_STATUS_UPDATED
-        RES-->>BFF: Devuelve la reserva actualizada
-        BFF-->>FE: Respuesta de confirmación
-        MQ--)NOT: Entrega los comandos desde sus colas
-        Note over MQ,NOT: msnofity procesa los comandos en segundo plano
+    Note over FE,NOT: 2 · Confirmar reserva — HTTP + tareas asíncronas
+    FE->>BFF: PUT /reservations/{id}/status · CONFIRMADA + JWT
+    BFF->>RES: PUT /api/reservations/{id}/status + JWT
+    RES->>DB: Actualiza el estado
+    RES->>MQ: housekeeping.ticket → cmd.direct
+    RES->>MQ: voucher.gen → cmd.direct
+    opt Email habilitado
+        RES->>MQ: notification.email → evt.topic
     end
+    RES->>K: Publica RESERVATION_STATUS_UPDATED
+    RES-->>BFF: Devuelve la reserva actualizada
+    BFF-->>FE: Respuesta de confirmación
+    MQ--)NOT: Entrega los comandos desde sus colas
+    Note over MQ,NOT: msnofity procesa los comandos en segundo plano
 ```
 
 El recorrido Frontend ↔ BFF ↔ reservas usa HTTP; el backend también consulta el catálogo, persiste los datos y publica eventos. RabbitMQ procesa sus comandos de forma asíncrona: la respuesta al frontend no espera a que housekeeping, voucher o el email terminen.
