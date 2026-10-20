@@ -18,7 +18,7 @@ Evidencia de las pruebas de seguridad de la API, el funcionamiento de RabbitMQ y
 
 **Regla de negocio inválida** — La operación no se ejecuta y no se publica ningún mensaje.
 
-![Regla inválida]<img width="739" height="213" alt="image4" src="https://github.com/user-attachments/assets/37c07395-371b-462e-9d4e-31ac0b0000f3" />
+<img width="739" height="213" alt="image4" src="https://github.com/user-attachments/assets/37c07395-371b-462e-9d4e-31ac0b0000f3" />
 
 
 ## RabbitMQ
