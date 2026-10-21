@@ -41,4 +41,6 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 
     @Query("SELECT r FROM Reservation r WHERE r.unitId = :unitId")
     List<Reservation> findByUnitId(@Param("unitId") Long unitId);
+
+    long countByStatus(ReservationStatus status);
 }

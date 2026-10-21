@@ -36,6 +36,11 @@ public class ReservationController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
+    @GetMapping("/active-occupancy")
+    public ResponseEntity<Long> getActiveOccupancy() {
+        return ResponseEntity.ok(reservationService.getActiveOccupancy());
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ReservationResponse> getById(
             @PathVariable Long id, @AuthenticationPrincipal Jwt jwt) {
