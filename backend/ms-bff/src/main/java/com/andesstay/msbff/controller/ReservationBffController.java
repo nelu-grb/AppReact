@@ -36,15 +36,6 @@ public class ReservationBffController {
                 .bodyToMono(ReservationResponse.class);
     }
 
-    @GetMapping("/active-occupancy")
-    public Mono<Long> getActiveOccupancy(@AuthenticationPrincipal Jwt jwt) {
-        return reservationsWebClient.get()
-                .uri("/api/reservations/active-occupancy")
-                .headers(headers -> headers.setBearerAuth(jwt.getTokenValue()))
-                .retrieve()
-                .bodyToMono(Long.class);
-    }
-
     @GetMapping("/{id}")
     public Mono<ReservationResponse> getById(@PathVariable Long id,
                                              @AuthenticationPrincipal Jwt jwt) {

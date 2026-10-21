@@ -121,10 +121,6 @@ public class ReservationService {
                 .collect(Collectors.toList());
     }
 
-    public long getActiveOccupancy() {
-        return reservationRepository.countByStatus(ReservationStatus.EN_ESTADIA);
-    }
-
     @Transactional
     public void deleteCancelledReservation(Long id) {
         Reservation reservation = reservationRepository.findById(id)
